@@ -3,7 +3,11 @@
     "allow": [
       "Bash(deno task:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(timeout:*)",
+      "WebFetch(domain:v2.tauri.app)"
     ],
     "deny": []
   }
