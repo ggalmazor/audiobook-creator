@@ -21,8 +21,32 @@
           "sidecar": false
         },
         {
+          "name": "ffmpeg-command-usr-local",
+          "cmd": "/usr/local/bin/ffmpeg",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "ffmpeg-command-usr",
+          "cmd": "/usr/bin/ffmpeg",
+          "args": true,
+          "sidecar": false
+        },
+        {
           "name": "ffprobe-command",
           "cmd": "/opt/homebrew/bin/ffprobe", 
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "ffprobe-command-usr-local",
+          "cmd": "/usr/local/bin/ffprobe", 
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "ffprobe-command-usr",
+          "cmd": "/usr/bin/ffprobe", 
           "args": true,
           "sidecar": false
         }

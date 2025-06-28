@@ -4,23 +4,35 @@ interface ChapterInfo {
   end: number
 }
 
-export async function getMp3Duration(filePath: string): Promise<number> {
+async function tryFFprobeCommand(filePath: string): Promise<number> {
   const { Command } = await import('@tauri-apps/plugin-shell')
-
-  try {
-    const output = await Command.create('ffprobe-command', [
-      '-show_entries',
-      'format=duration',
-      '-of',
-      'csv=p=0',
-      filePath
-    ]).execute()
-    
-    if (output.code === 0) {
-      return parseFloat(output.stdout.trim())
-    } else {
-      throw new Error(`Failed to get duration (code ${output.code}): ${output.stderr}`)
+  const commandNames = ['ffprobe-command', 'ffprobe-command-usr-local', 'ffprobe-command-usr']
+  
+  for (const commandName of commandNames) {
+    try {
+      const output = await Command.create(commandName, [
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'csv=p=0',
+        filePath
+      ]).execute()
+      
+      if (output.code === 0) {
+        return parseFloat(output.stdout.trim())
+      }
+    } catch (error) {
+      // Try next command path
+      continue
     }
+  }
+  
+  throw new Error('FFprobe not found in any of the expected locations')
+}
+
+export async function getMp3Duration(filePath: string): Promise<number> {
+  try {
+    return await tryFFprobeCommand(filePath)
   } catch (error) {
     throw new Error(`Error getting MP3 duration: ${error}`)
   }

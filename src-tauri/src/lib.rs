@@ -17,13 +17,29 @@ async fn convert_with_ffmpeg_args(
         return Err("No FFmpeg arguments provided".to_string());
     }
 
-    // Execute FFmpeg command
-    let output = tauri_plugin_shell::ShellExt::shell(&app_handle)
-        .command("ffmpeg-command")
-        .args(&ffmpeg_args)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to execute FFmpeg: {}", e))?;
+    // Try different FFmpeg command paths
+    let command_names = ["ffmpeg-command", "ffmpeg-command-usr-local", "ffmpeg-command-usr"];
+    let mut output = None;
+    let mut last_error = String::new();
+
+    for command_name in command_names.iter() {
+        match tauri_plugin_shell::ShellExt::shell(&app_handle)
+            .command(command_name)
+            .args(&ffmpeg_args)
+            .output()
+            .await {
+            Ok(result) => {
+                output = Some(result);
+                break;
+            }
+            Err(e) => {
+                last_error = format!("Failed to execute FFmpeg with {}: {}", command_name, e);
+                continue;
+            }
+        }
+    }
+
+    let output = output.ok_or_else(|| format!("FFmpeg not found in any expected location. Last error: {}", last_error))?;
 
     // Clean up temporary metadata file if it exists
     if let Some(metadata_path) = metadata_file {
@@ -95,13 +111,29 @@ async fn convert_to_audiobook(
         output_file.clone(),
     ]);
 
-    // Execute FFmpeg command
-    let output = tauri_plugin_shell::ShellExt::shell(&app_handle)
-        .command("ffmpeg-command")
-        .args(&ffmpeg_args)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to execute FFmpeg: {}", e))?;
+    // Try different FFmpeg command paths
+    let command_names = ["ffmpeg-command", "ffmpeg-command-usr-local", "ffmpeg-command-usr"];
+    let mut output = None;
+    let mut last_error = String::new();
+
+    for command_name in command_names.iter() {
+        match tauri_plugin_shell::ShellExt::shell(&app_handle)
+            .command(command_name)
+            .args(&ffmpeg_args)
+            .output()
+            .await {
+            Ok(result) => {
+                output = Some(result);
+                break;
+            }
+            Err(e) => {
+                last_error = format!("Failed to execute FFmpeg with {}: {}", command_name, e);
+                continue;
+            }
+        }
+    }
+
+    let output = output.ok_or_else(|| format!("FFmpeg not found in any expected location. Last error: {}", last_error))?;
 
     if output.status.success() {
         Ok(format!("Audiobook created successfully: {}", output_file))
