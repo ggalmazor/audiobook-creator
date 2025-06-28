@@ -8,7 +8,25 @@
   "permissions": [
     "core:default",
     "dialog:default",
-    "shell:allow-execute",
-    "shell:allow-open"
+    "fs:allow-write-text-file",
+    "fs:allow-temp-write",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "ffmpeg-command",
+          "cmd": "ffmpeg",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "ffprobe-command",
+          "cmd": "ffprobe", 
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    }
   ]
 }
