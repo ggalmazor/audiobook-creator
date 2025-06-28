@@ -1,11 +1,15 @@
 import './app.css'
 import { useState } from 'preact/hooks'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 
 export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isConverting, setIsConverting] = useState(false)
+  const [title, setTitle] = useState('')
+  const [author, setAuthor] = useState('')
 
   const addUniqueFiles = (newFiles: MP3File[]) => {
     setMp3Files(prev => {
@@ -44,6 +48,40 @@ export function App() {
 
   const removeFile = (index: number) => {
     setMp3Files(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleConvert = async () => {
+    if (mp3Files.length === 0) {
+      alert('Please select at least one MP3 file')
+      return
+    }
+
+    try {
+      const outputPath = await save({
+        filters: [{
+          name: 'M4B Audiobook',
+          extensions: ['m4b']
+        }]
+      })
+
+      if (!outputPath) return
+
+      setIsConverting(true)
+      
+      const filePaths = mp3Files.map(f => f.path)
+      const result = await invoke('convert_to_audiobook', {
+        mp3Files: filePaths,
+        outputPath,
+        title: title || undefined,
+        author: author || undefined
+      })
+
+      alert(`Success: ${result}`)
+    } catch (error) {
+      alert(`Error: ${error}`)
+    } finally {
+      setIsConverting(false)
+    }
   }
 
   const handleDragOver = (e: any) => {
@@ -119,6 +157,38 @@ export function App() {
               </div>
             ))}
           </div>
+
+          <div class="metadata-form">
+            <h3>Audiobook Details</h3>
+            <div class="form-row">
+              <label htmlFor="title">Title:</label>
+              <input
+                id="title"
+                type="text"
+                value={title}
+                onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+                placeholder="Enter book title (optional)"
+              />
+            </div>
+            <div class="form-row">
+              <label htmlFor="author">Author:</label>
+              <input
+                id="author"
+                type="text"
+                value={author}
+                onInput={(e) => setAuthor((e.target as HTMLInputElement).value)}
+                placeholder="Enter author name (optional)"
+              />
+            </div>
+          </div>
+
+          <button 
+            class="convert-btn"
+            onClick={handleConvert}
+            disabled={isConverting}
+          >
+            {isConverting ? 'Converting...' : 'Create Audiobook'}
+          </button>
         </div>
       )}
     </div>
