@@ -1,10 +1,61 @@
 
+use std::fs::File;
+use std::path::Path;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use symphonia::default::get_probe;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ConversionProgress {
     current_file: usize,
     total_files: usize,
     current_file_name: String,
     percentage: f32,
+}
+
+fn get_mp3_duration(file_path: &str) -> Result<f64, String> {
+    let path = Path::new(file_path);
+    let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    hint.with_extension("mp3");
+    
+    let meta_opts: MetadataOptions = Default::default();
+    let mut probed = get_probe()
+        .format(&hint, mss, &Default::default(), &meta_opts)
+        .map_err(|e| format!("Failed to probe file: {}", e))?;
+    
+    let track = probed
+        .format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or("No valid audio track found")?;
+    
+    let time_base = track.codec_params.time_base;
+    let n_frames = track.codec_params.n_frames;
+    
+    match (time_base, n_frames) {
+        (Some(tb), Some(frames)) => {
+            let duration = frames as f64 * tb.numer as f64 / tb.denom as f64;
+            Ok(duration)
+        }
+        _ => Err("Could not determine duration".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_mp3_durations(mp3_files: Vec<String>) -> Result<Vec<f64>, String> {
+    let mut durations = Vec::new();
+    
+    for file_path in mp3_files {
+        let duration = get_mp3_duration(&file_path)?;
+        durations.push(duration);
+    }
+    
+    Ok(durations)
 }
 
 #[tauri::command]
@@ -149,7 +200,7 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_fs::init())
-    .invoke_handler(tauri::generate_handler![convert_to_audiobook, convert_with_ffmpeg_args])
+    .invoke_handler(tauri::generate_handler![convert_to_audiobook, convert_with_ffmpeg_args, get_mp3_durations])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

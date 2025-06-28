@@ -4,46 +4,17 @@ interface ChapterInfo {
   end: number
 }
 
-async function tryFFprobeCommand(filePath: string): Promise<number> {
-  const { Command } = await import('@tauri-apps/plugin-shell')
-  const commandNames = ['ffprobe-command', 'ffprobe-command-usr-local', 'ffprobe-command-usr']
-  
-  for (const commandName of commandNames) {
-    try {
-      const output = await Command.create(commandName, [
-        '-show_entries',
-        'format=duration',
-        '-of',
-        'csv=p=0',
-        filePath
-      ]).execute()
-      
-      if (output.code === 0) {
-        return parseFloat(output.stdout.trim())
-      }
-    } catch (error) {
-      // Try next command path
-      continue
-    }
-  }
-  
-  throw new Error('FFprobe not found in any of the expected locations')
-}
-
-export async function getMp3Duration(filePath: string): Promise<number> {
-  try {
-    return await tryFFprobeCommand(filePath)
-  } catch (error) {
-    throw new Error(`Error getting MP3 duration: ${error}`)
-  }
-}
+import { invoke } from '@tauri-apps/api/core'
 
 export async function generateChapterMetadata(mp3Files: string[]): Promise<string> {
+  // Use Rust backend to get durations for all files efficiently
+  const durations = await invoke('get_mp3_durations', { mp3Files }) as number[]
+  
   const chapters: ChapterInfo[] = []
   let currentTime = 0
 
   for (let i = 0; i < mp3Files.length; i++) {
-    const duration = await getMp3Duration(mp3Files[i])
+    const duration = durations[i]
     const fileName = mp3Files[i].split('/').pop()?.replace('.mp3', '') || `Chapter ${i + 1}`
     
     chapters.push({
