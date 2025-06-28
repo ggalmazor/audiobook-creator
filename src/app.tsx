@@ -1,33 +1,132 @@
 import './app.css'
 import { useState } from 'preact/hooks'
-import preactLogo from './assets/preact.svg'
+import { open } from '@tauri-apps/plugin-dialog'
+
+interface MP3File {
+  name: string
+  path: string
+  size: number
+}
 
 export function App() {
-  const [count, setCount] = useState(0)
+  const [mp3Files, setMp3Files] = useState<MP3File[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const addUniqueFiles = (newFiles: MP3File[]) => {
+    setMp3Files(prev => {
+      const existingPaths = new Set(prev.map(f => f.path))
+      const uniqueFiles = newFiles.filter(file => !existingPaths.has(file.path))
+      return [...prev, ...uniqueFiles]
+    })
+  }
+
+  const handleFileSelect = async () => {
+    console.log('File select clicked')
+    try {
+      console.log('Opening dialog...')
+      const selected = await open({
+        multiple: true,
+        filters: [{
+          name: 'MP3 Audio',
+          extensions: ['mp3']
+        }]
+      })
+      
+      console.log('Dialog result:', selected)
+      
+      if (selected) {
+        const files = Array.isArray(selected) ? selected : [selected]
+        const newFiles: MP3File[] = files.map(path => ({
+          name: path.split('/').pop() || path,
+          path,
+          size: 0
+        }))
+        addUniqueFiles(newFiles)
+      }
+    } catch (error) {
+      console.error('Error selecting files:', error)
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setMp3Files(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleDragOver = (e: any) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: any) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: any) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer?.files || []) as File[]
+    const mp3Files = files.filter(file => file.name.toLowerCase().endsWith('.mp3'))
+    
+    const newFiles: MP3File[] = mp3Files.map(file => ({
+      name: file.name,
+      path: file.name,
+      size: file.size
+    }))
+    
+    addUniqueFiles(newFiles)
+  }
 
   return (
-    <>
-      <img src="/vite-deno.svg" alt="Vite with Deno" />
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" class="logo" alt="Vite logo" />
-        </a>
-        <a href="https://preactjs.com" target="_blank">
-          <img src={preactLogo} class="logo preact" alt="Preact logo" />
-        </a>
+    <div class="app">
+      <h1>Audiobook Creator</h1>
+      
+      <div 
+        class={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleFileSelect}
+      >
+        <div class="drop-zone-content">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14,2 14,8 20,8"/>
+            <circle cx="12" cy="15" r="3"/>
+            <path d="M12 12v6"/>
+          </svg>
+          <p>Drop MP3 files here or click to select</p>
+          <p class="hint">Select multiple MP3 files to create your audiobook</p>
+        </div>
       </div>
-      <h1>Vite + Preact</h1>
-      <div class="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/app.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p class="read-the-docs">
-        Click on the Vite and Preact logos to learn more
-      </p>
-    </>
+
+      {mp3Files.length > 0 && (
+        <div class="file-list">
+          <h3>Selected Files ({mp3Files.length})</h3>
+          <div class="files">
+            {mp3Files.map((file, index) => (
+              <div key={index} class="file-item">
+                <div class="file-info">
+                  <span class="file-name">{file.name}</span>
+                  {file.size > 0 && (
+                    <span class="file-size">
+                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  )}
+                </div>
+                <button 
+                  class="remove-btn"
+                  onClick={() => removeFile(index)}
+                  aria-label="Remove file"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
