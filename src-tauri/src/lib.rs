@@ -23,7 +23,7 @@ fn get_mp3_duration(file_path: &str) -> Result<f64, String> {
     hint.with_extension("mp3");
     
     let meta_opts: MetadataOptions = Default::default();
-    let mut probed = get_probe()
+    let probed = get_probe()
         .format(&hint, mss, &Default::default(), &meta_opts)
         .map_err(|e| format!("Failed to probe file: {}", e))?;
     
