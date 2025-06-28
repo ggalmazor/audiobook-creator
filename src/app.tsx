@@ -1,12 +1,7 @@
 import './app.css'
 import { useState } from 'preact/hooks'
 import { open } from '@tauri-apps/plugin-dialog'
-
-interface MP3File {
-  name: string
-  path: string
-  size: number
-}
+import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 
 export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
@@ -14,8 +9,7 @@ export function App() {
 
   const addUniqueFiles = (newFiles: MP3File[]) => {
     setMp3Files(prev => {
-      const existingPaths = new Set(prev.map(f => f.path))
-      const uniqueFiles = newFiles.filter(file => !existingPaths.has(file.path))
+      const uniqueFiles = deduplicateFiles(prev, newFiles)
       return [...prev, ...uniqueFiles]
     })
   }

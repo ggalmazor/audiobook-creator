@@ -4,10 +4,11 @@
     "build": "deno run -A --node-modules-dir npm:vite build",
     "preview": "deno run -A --node-modules-dir npm:vite preview",
     "serve": "deno run --allow-net --allow-read jsr:@std/http@1/file-server dist/",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "deno test --allow-read --allow-env"
   },
   "compilerOptions": {
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "Deno.NS"],
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
@@ -16,6 +17,8 @@
     "@preact/preset-vite": "npm:@preact/preset-vite@^2.10.1",
     "@tauri-apps/cli": "npm:@tauri-apps/cli@^2.6.1",
     "@tauri-apps/plugin-dialog": "npm:@tauri-apps/plugin-dialog@^2.0.0",
+    "@testing-library/preact": "npm:@testing-library/preact@^3.2.4",
+    "@testing-library/jest-dom": "npm:@testing-library/jest-dom@^6.6.3",
     "preact": "npm:preact@^10.26.2",
     "vite": "npm:vite@^6.1.1"
   },

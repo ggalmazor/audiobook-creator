@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(deno task:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}
