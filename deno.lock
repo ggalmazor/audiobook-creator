@@ -9,6 +9,8 @@
     "npm:@tauri-apps/cli@2.6.1": "2.6.1",
     "npm:@tauri-apps/cli@^2.6.1": "2.6.1",
     "npm:@tauri-apps/plugin-dialog@2": "2.3.0",
+    "npm:@tauri-apps/plugin-fs@2": "2.4.0",
+    "npm:@tauri-apps/plugin-shell@2": "2.3.0",
     "npm:preact@^10.26.2": "10.26.9",
     "npm:vite@*": "6.3.5_picomatch@4.0.2",
     "npm:vite@^6.1.1": "6.3.5_picomatch@4.0.2"
@@ -565,6 +567,18 @@
         "@tauri-apps/api"
       ]
     },
+    "@tauri-apps/plugin-fs@2.4.0": {
+      "integrity": "sha512-Sp8AdDcbyXyk6LD6Pmdx44SH3LPeNAvxR2TFfq/8CwqzfO1yOyV+RzT8fov0NNN7d9nvW7O7MtMAptJ42YXA5g==",
+      "dependencies": [
+        "@tauri-apps/api"
+      ]
+    },
+    "@tauri-apps/plugin-shell@2.3.0": {
+      "integrity": "sha512-6GIRxO2z64uxPX4CCTuhQzefvCC0ew7HjdBhMALiGw74vFBDY95VWueAHOHgNOMV4UOUAFupyidN9YulTe5xlA==",
+      "dependencies": [
+        "@tauri-apps/api"
+      ]
+    },
     "@types/estree@1.0.8": {
       "integrity": "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="
     },
@@ -877,6 +891,8 @@
       "npm:@tauri-apps/api@2",
       "npm:@tauri-apps/cli@^2.6.1",
       "npm:@tauri-apps/plugin-dialog@2",
+      "npm:@tauri-apps/plugin-fs@2",
+      "npm:@tauri-apps/plugin-shell@2",
       "npm:preact@^10.26.2",
       "npm:vite@^6.1.1"
     ]
