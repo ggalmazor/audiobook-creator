@@ -16,13 +16,13 @@
       "allow": [
         {
           "name": "ffmpeg-command",
-          "cmd": "ffmpeg",
+          "cmd": "/opt/homebrew/bin/ffmpeg",
           "args": true,
           "sidecar": false
         },
         {
           "name": "ffprobe-command",
-          "cmd": "ffprobe", 
+          "cmd": "/opt/homebrew/bin/ffprobe", 
           "args": true,
           "sidecar": false
         }
