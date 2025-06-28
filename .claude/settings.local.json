@@ -8,7 +8,8 @@
       "Bash(true)",
       "Bash(timeout:*)",
       "WebFetch(domain:v2.tauri.app)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cargo check:*)"
     ],
     "deny": []
   }
