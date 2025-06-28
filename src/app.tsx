@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
+import { validateConversionInputs, generateFFmpegArgs } from './utils/conversionUtils.ts'
 
 export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
@@ -69,11 +70,25 @@ export function App() {
       setIsConverting(true)
       
       const filePaths = mp3Files.map(f => f.path)
-      const result = await invoke('convert_to_audiobook', {
-        mp3Files: filePaths,
-        outputPath,
-        title: title || undefined,
-        author: author || undefined
+      
+      // Validate inputs
+      const validationError = validateConversionInputs(filePaths, outputPath)
+      if (validationError) {
+        alert(`Validation Error: ${validationError}`)
+        return
+      }
+
+      // Generate FFmpeg arguments with chapter metadata
+      const { args, metadataFile } = await generateFFmpegArgs(
+        filePaths, 
+        outputPath, 
+        title || undefined, 
+        author || undefined
+      )
+
+      const result = await invoke('convert_with_ffmpeg_args', {
+        ffmpegArgs: args,
+        metadataFile
       })
 
       alert(`Success: ${result}`)
