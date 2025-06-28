@@ -1,5 +1,3 @@
-use tauri::Manager;
-use std::path::PathBuf;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ConversionProgress {
@@ -7,6 +5,40 @@ struct ConversionProgress {
     total_files: usize,
     current_file_name: String,
     percentage: f32,
+}
+
+#[tauri::command]
+async fn convert_with_ffmpeg_args(
+    app_handle: tauri::AppHandle,
+    ffmpeg_args: Vec<String>,
+    metadata_file: Option<String>,
+) -> Result<String, String> {
+    if ffmpeg_args.is_empty() {
+        return Err("No FFmpeg arguments provided".to_string());
+    }
+
+    // Execute FFmpeg command
+    let output = tauri_plugin_shell::ShellExt::shell(&app_handle)
+        .command("ffmpeg-command")
+        .args(&ffmpeg_args)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute FFmpeg: {}", e))?;
+
+    // Clean up temporary metadata file if it exists
+    if let Some(metadata_path) = metadata_file {
+        let _ = std::fs::remove_file(&metadata_path); // Ignore errors for cleanup
+    }
+
+    if output.status.success() {
+        // Extract output file from args (should be the last argument)
+        let default_name = "audiobook.m4b".to_string();
+        let output_file = ffmpeg_args.last().unwrap_or(&default_name);
+        Ok(format!("Audiobook created successfully: {}", output_file))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("FFmpeg error: {}", stderr))
+    }
 }
 
 #[tauri::command]
@@ -65,7 +97,7 @@ async fn convert_to_audiobook(
 
     // Execute FFmpeg command
     let output = tauri_plugin_shell::ShellExt::shell(&app_handle)
-        .command("ffmpeg")
+        .command("ffmpeg-command")
         .args(&ffmpeg_args)
         .output()
         .await
@@ -84,7 +116,8 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
-    .invoke_handler(tauri::generate_handler![convert_to_audiobook])
+    .plugin(tauri_plugin_fs::init())
+    .invoke_handler(tauri::generate_handler![convert_to_audiobook, convert_with_ffmpeg_args])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
