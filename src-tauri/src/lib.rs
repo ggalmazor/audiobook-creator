@@ -1,14 +1,13 @@
 
 use std::fs::File;
 use std::path::Path;
-use std::io::{Write, Seek, SeekFrom, BufWriter};
+use std::io::{Write, BufWriter};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::audio::{AudioBufferRef, Signal};
 use symphonia::default::{get_probe, get_codecs};
 use symphonia::core::formats::FormatOptions;
-use mp4::{Mp4Writer, Mp4Config, TrackConfig, AacConfig, MediaConfig};
 use tempfile::NamedTempFile;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -211,7 +210,7 @@ fn create_m4b_container(
 
 fn write_m4a_header(
     writer: &mut BufWriter<File>,
-    data_size: u64,
+    _data_size: u64,
     title: Option<&str>,
     author: Option<&str>,
     chapters: &[ChapterInfo],
