@@ -29,3 +29,4 @@ tauri-plugin-fs = "2"
 symphonia = { version = "0.5", features = ["mp3", "aac"] }
 hound = "3.5"
 mp4 = "0.14"
+tempfile = "3.8"
