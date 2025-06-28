@@ -3,14 +3,14 @@ import { useState } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
-import { validateConversionInputs, generateFFmpegArgs } from './utils/conversionUtils.ts'
+import { validateConversionInputs } from './utils/conversionUtils.ts'
 
 export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
-  const [title, setTitle] = useState('')
-  const [author, setAuthor] = useState('')
+  const [title, setTitle] = useState('The Gods Themselves')
+  const [author, setAuthor] = useState('Isaac Asimov')
 
   const addUniqueFiles = (newFiles: MP3File[]) => {
     setMp3Files(prev => {
@@ -78,17 +78,12 @@ export function App() {
         return
       }
 
-      // Generate FFmpeg arguments with chapter metadata
-      const { args, metadataFile } = await generateFFmpegArgs(
-        filePaths, 
-        outputPath, 
-        title || undefined, 
-        author || undefined
-      )
-
-      const result = await invoke('convert_with_ffmpeg_args', {
-        ffmpegArgs: args,
-        metadataFile
+      // Use native Rust conversion
+      const result = await invoke('convert_to_m4b_native', {
+        mp3Files: filePaths,
+        outputPath,
+        title: title || undefined,
+        author: author || undefined
       })
 
       alert(`Success: ${result}`)

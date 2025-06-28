@@ -4,7 +4,9 @@ use std::path::Path;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use symphonia::default::get_probe;
+use symphonia::core::audio::{AudioBufferRef, Signal};
+use symphonia::default::{get_probe, get_codecs};
+use symphonia::core::formats::FormatOptions;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ConversionProgress {
@@ -56,6 +58,150 @@ async fn get_mp3_durations(mp3_files: Vec<String>) -> Result<Vec<f64>, String> {
     }
     
     Ok(durations)
+}
+
+fn decode_mp3_to_samples(file_path: &str) -> Result<(Vec<f32>, u32, u32), String> {
+    let path = Path::new(file_path);
+    let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    hint.with_extension("mp3");
+    
+    let meta_opts: MetadataOptions = Default::default();
+    let fmt_opts: FormatOptions = Default::default();
+    
+    let probed = get_probe()
+        .format(&hint, mss, &fmt_opts, &meta_opts)
+        .map_err(|e| format!("Failed to probe file: {}", e))?;
+    
+    let mut format = probed.format;
+    let track = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or("No valid audio track found")?;
+    
+    let track_id = track.id;
+    let mut decoder = get_codecs()
+        .make(&track.codec_params, &Default::default())
+        .map_err(|e| format!("Failed to create decoder: {}", e))?;
+    
+    let mut samples = Vec::new();
+    let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+    let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2) as u32;
+    
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(_) => break,
+        };
+        
+        if packet.track_id() != track_id {
+            continue;
+        }
+        
+        match decoder.decode(&packet) {
+            Ok(audio_buf) => {
+                // Convert audio buffer to f32 samples
+                match audio_buf {
+                    AudioBufferRef::F32(buf) => {
+                        for &sample in buf.chan(0) {
+                            samples.push(sample);
+                        }
+                    }
+                    AudioBufferRef::S16(buf) => {
+                        for &sample in buf.chan(0) {
+                            samples.push(sample as f32 / 32768.0);
+                        }
+                    }
+                    AudioBufferRef::S32(buf) => {
+                        for &sample in buf.chan(0) {
+                            samples.push(sample as f32 / 2147483648.0);
+                        }
+                    }
+                    _ => return Err("Unsupported audio format".to_string()),
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    
+    Ok((samples, sample_rate, channels))
+}
+
+#[tauri::command]
+async fn convert_to_m4b_native(
+    mp3_files: Vec<String>,
+    output_path: String,
+    _title: Option<String>,
+    _author: Option<String>,
+) -> Result<String, String> {
+    if mp3_files.is_empty() {
+        return Err("No MP3 files provided".to_string());
+    }
+
+    // First, let's create a WAV file by concatenating all MP3s
+    let mut all_samples = Vec::new();
+    let mut sample_rate = 44100u32;
+    let mut channels = 2u32;
+    let mut chapter_boundaries = Vec::new();
+    let mut current_sample = 0;
+
+    // Get durations for chapter metadata (will be used later for M4B)
+    let _durations = {
+        let mut durations = Vec::new();
+        for file_path in &mp3_files {
+            let duration = get_mp3_duration(file_path)?;
+            durations.push(duration);
+        }
+        durations
+    };
+
+    // Decode and concatenate all MP3 files
+    for (i, file_path) in mp3_files.iter().enumerate() {
+        let (samples, sr, ch) = decode_mp3_to_samples(file_path)?;
+        
+        if i == 0 {
+            sample_rate = sr;
+            channels = ch;
+        }
+        
+        // Add chapter boundary
+        let file_name = file_path.split('/').last().unwrap_or(&format!("Chapter {}", i + 1))
+            .replace(".mp3", "");
+        chapter_boundaries.push((current_sample, file_name));
+        
+        all_samples.extend(samples);
+        current_sample = all_samples.len();
+    }
+
+    // Create output WAV file (for now, we'll enhance this to M4B later)
+    let output_file = if output_path.ends_with(".m4b") { 
+        output_path.replace(".m4b", ".wav")
+    } else { 
+        format!("{}.wav", output_path) 
+    };
+
+    let spec = hound::WavSpec {
+        channels: channels as u16,
+        sample_rate,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+
+    let mut writer = hound::WavWriter::create(&output_file, spec)
+        .map_err(|e| format!("Failed to create WAV file: {}", e))?;
+
+    for sample in all_samples {
+        writer.write_sample(sample)
+            .map_err(|e| format!("Failed to write sample: {}", e))?;
+    }
+
+    writer.finalize()
+        .map_err(|e| format!("Failed to finalize WAV file: {}", e))?;
+
+    Ok(format!("Audiobook created successfully as WAV: {} (M4B conversion coming soon)", output_file))
 }
 
 #[tauri::command]
@@ -200,7 +346,7 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_fs::init())
-    .invoke_handler(tauri::generate_handler![convert_to_audiobook, convert_with_ffmpeg_args, get_mp3_durations])
+    .invoke_handler(tauri::generate_handler![convert_to_audiobook, convert_with_ffmpeg_args, get_mp3_durations, convert_to_m4b_native])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

@@ -26,4 +26,6 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
-symphonia = { version = "0.5", features = ["mp3"] }
+symphonia = { version = "0.5", features = ["mp3", "aac"] }
+hound = "3.5"
+mp4 = "0.14"
