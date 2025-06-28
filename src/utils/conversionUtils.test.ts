@@ -27,7 +27,7 @@ Deno.test("generateFFmpegArgs creates correct command for single file", () => {
     "-y",
     "-i", "/input/file1.mp3",
     "-filter_complex", "concat=n=1:v=0:a=1",
-    "-c:a", "aac", "-b:a", "64k",
+    "-vn", "-c:a", "aac", "-b:a", "64k",
     "-metadata", "genre=Audiobook",
     "/output/audiobook.m4b"
   ]
@@ -46,7 +46,7 @@ Deno.test("generateFFmpegArgs creates correct command for multiple files with me
     "-i", "/input/file1.mp3",
     "-i", "/input/file2.mp3",
     "-filter_complex", "concat=n=2:v=0:a=1",
-    "-c:a", "aac", "-b:a", "64k",
+    "-vn", "-c:a", "aac", "-b:a", "64k",
     "-metadata", "title=My Book",
     "-metadata", "artist=Author Name",
     "-metadata", "genre=Audiobook",

@@ -36,11 +36,12 @@ async fn convert_to_audiobook(
         ffmpeg_args.push(file.clone());
     }
 
-    // Create filter complex for concatenation
+    // Create filter complex for concatenation (audio only)
     let filter_complex = format!("concat=n={}:v=0:a=1", mp3_files.len());
     ffmpeg_args.extend([
         "-filter_complex".to_string(),
         filter_complex,
+        "-vn".to_string(),  // No video
         "-c:a".to_string(),
         "aac".to_string(),
         "-b:a".to_string(),

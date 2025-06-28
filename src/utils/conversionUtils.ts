@@ -24,12 +24,12 @@ export function generateFFmpegArgs(mp3Files: string[], outputPath: string, title
     args.push('-i', file)
   }
 
-  // Create filter complex for concatenation
+  // Create filter complex for concatenation (audio only)
   const filterComplex = `concat=n=${mp3Files.length}:v=0:a=1`
   args.push('-filter_complex', filterComplex)
 
-  // Audio encoding settings
-  args.push('-c:a', 'aac', '-b:a', '64k')
+  // Audio encoding settings (no video)
+  args.push('-vn', '-c:a', 'aac', '-b:a', '64k')
 
   // Add metadata
   if (title) {
