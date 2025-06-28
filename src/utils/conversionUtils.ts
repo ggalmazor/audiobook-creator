@@ -16,7 +16,6 @@ export async function getMp3Duration(filePath: string): Promise<number> {
       filePath
     ]).execute()
     
-    console.log('ffprobe output:', output)
     if (output.code === 0) {
       return parseFloat(output.stdout.trim())
     } else {
