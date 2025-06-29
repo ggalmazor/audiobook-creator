@@ -132,21 +132,29 @@ async fn extract_mp3_metadata(file_path: &str) -> Result<(Option<String>, Option
     }
     
     let metadata_str = String::from_utf8_lossy(&output.stdout);
-    let lines: Vec<&str> = metadata_str.trim().split('\n').collect();
+    let line = metadata_str.trim();
     
-    let mut title = None;
-    let mut artist = None;
-    
-    for line in lines {
-        if line.starts_with("title=") {
-            title = Some(line.trim_start_matches("title=").to_string());
-        } else if line.starts_with("artist=") {
-            artist = Some(line.trim_start_matches("artist=").to_string());
-        } else if line.starts_with("album_artist=") && artist.is_none() {
-            // Use album_artist as fallback if no artist found
-            artist = Some(line.trim_start_matches("album_artist=").to_string());
-        }
+    if line.is_empty() {
+        return Ok((None, None));
     }
+    
+    // Parse CSV format: title,artist,album_artist (in that order based on show_entries)
+    let fields: Vec<&str> = line.split(',').collect();
+    
+    let title = if fields.len() > 0 && !fields[0].is_empty() {
+        Some(fields[0].to_string())
+    } else {
+        None
+    };
+    
+    let artist = if fields.len() > 1 && !fields[1].is_empty() {
+        Some(fields[1].to_string())
+    } else if fields.len() > 2 && !fields[2].is_empty() {
+        // Fallback to album_artist if artist is empty
+        Some(fields[2].to_string())
+    } else {
+        None
+    };
     
     Ok((title, artist))
 }
