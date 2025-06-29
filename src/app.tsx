@@ -1,11 +1,13 @@
 import './app.css'
-import { useState, useRef, useEffect } from 'preact/hooks'
-import { open, save } from '@tauri-apps/plugin-dialog'
+import { useState, useEffect } from 'preact/hooks'
+import { save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { convertFileSrc } from '@tauri-apps/api/core'
-import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
+import type { MP3File } from './types/index.ts'
 import { validateConversionInputs } from './utils/conversionUtils.ts'
+import { useRouter } from './hooks/useRouter.ts'
+import { MainView } from './components/MainView.tsx'
+import { ConversionView } from './components/ConversionView.tsx'
 
 // Helper function to format duration in hours, minutes, seconds
 const formatDuration = (seconds: number): string => {
@@ -23,8 +25,10 @@ const formatDuration = (seconds: number): string => {
 }
 
 export function App() {
+  const router = useRouter()
+  
+  // State management
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
-  const [isDragOver, setIsDragOver] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
@@ -35,22 +39,12 @@ export function App() {
   const [showCommandOutput, setShowCommandOutput] = useState(false)
   const [commandOutput, setCommandOutput] = useState('')
   const [realtimeOutput, setRealtimeOutput] = useState<string[]>([])
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const dragCounter = useRef(0)
-  const outputRef = useRef<HTMLDivElement>(null)
 
   // Listen for real-time conversion output
   useEffect(() => {
     const unlisten = listen('conversion-output', (event) => {
       const output = event.payload as string
       setRealtimeOutput(prev => [...prev, output])
-      
-      // Auto-scroll to bottom
-      setTimeout(() => {
-        if (outputRef.current) {
-          outputRef.current.scrollTop = outputRef.current.scrollHeight
-        }
-      }, 10)
     })
 
     return () => {
@@ -58,175 +52,37 @@ export function App() {
     }
   }, [])
 
-  const addUniqueFiles = async (newFiles: MP3File[]) => {
-    setMp3Files(prev => {
-      const uniqueFiles = deduplicateFiles(prev, newFiles)
-      return [...prev, ...uniqueFiles]
-    })
-    
-    // Extract metadata and cover from the first file if we're adding the first files
-    if (mp3Files.length === 0 && newFiles.length > 0) {
-      try {
-        // Extract metadata (title and author)
-        const metadata = await invoke('extract_mp3_metadata_command', { mp3File: newFiles[0].path })
-        if (metadata && Array.isArray(metadata)) {
-          const [extractedTitle, extractedAuthor] = metadata
-          if (extractedTitle && !title) {
-            setTitle(extractedTitle)
-          }
-          if (extractedAuthor && !author) {
-            setAuthor(extractedAuthor)
-          }
-        }
-      } catch (error) {
-        console.log('No metadata found in first MP3 file:', error)
-      }
-
-      // Try to extract cover if no cover is set
-      if (!coverImage) {
-        try {
-          const extractedCover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
-          if (extractedCover && typeof extractedCover === 'string') {
-            setCoverImage(extractedCover)
-            setIsAutoDetectedCover(true)
-          }
-        } catch (error) {
-          console.log('No cover art found in first MP3 file:', error)
-        }
-      }
+  // Navigation effect for conversion state
+  useEffect(() => {
+    if (isConverting && router.isMainView) {
+      router.navigate('conversion')
+    } else if (!isConverting && router.isConversionView) {
+      router.navigate('main')
     }
+  }, [isConverting, router])
+
+  // Event handlers
+  const handleCoverChange = (cover: string | null, path: string | null, isAutoDetected: boolean) => {
+    setCoverImage(cover)
+    setCoverImagePath(path)
+    setIsAutoDetectedCover(isAutoDetected)
   }
 
-  const handleFileSelect = async () => {
-    console.log('File select clicked')
-    try {
-      console.log('Opening dialog...')
-      const selected = await open({
-        multiple: true,
-        filters: [{
-          name: 'MP3 Audio',
-          extensions: ['mp3']
-        }]
-      })
-      
-      console.log('Dialog result:', selected)
-      
-      if (selected) {
-        const files = Array.isArray(selected) ? selected : [selected]
-        const newFiles: MP3File[] = files.map(path => ({
-          name: path.split('/').pop() || path,
-          path,
-          size: 0
-        }))
-        await addUniqueFiles(newFiles)
-      }
-    } catch (error) {
-      console.error('Error selecting files:', error)
-    }
+  const handleToggleCommandOutput = () => {
+    setShowCommandOutput(!showCommandOutput)
   }
 
-  const handleCoverSelect = async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{
-          name: 'Image Files',
-          extensions: ['jpg', 'jpeg', 'png', 'webp']
-        }]
-      })
-      
-      if (selected && typeof selected === 'string') {
-        try {
-          // Convert the selected image to a data URL for reliable preview
-          const dataUrl = await invoke('convert_image_to_data_url', { imagePath: selected })
-          setCoverImage(dataUrl as string)
-          setCoverImagePath(selected)
-          setIsAutoDetectedCover(false)
-        } catch (error) {
-          console.error('Failed to convert image to data URL:', error)
-          // Fallback to original path
-          setCoverImage(selected)
-          setCoverImagePath(selected)
-          setIsAutoDetectedCover(false)
-        }
-      }
-    } catch (error) {
-      console.error('Error selecting cover image:', error)
-    }
-  }
-
-  const removeCover = () => {
+  const resetUIState = () => {
+    setConversionProgress('')
+    setCommandOutput('')
+    setRealtimeOutput([])
+    setShowCommandOutput(false)
+    setMp3Files([])
     setCoverImage(null)
     setCoverImagePath(null)
     setIsAutoDetectedCover(false)
-  }
-
-  const removeFile = (index: number) => {
-    setMp3Files(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const moveFile = (fromIndex: number, toIndex: number) => {
-    setMp3Files(prev => {
-      const newFiles = [...prev]
-      const [moved] = newFiles.splice(fromIndex, 1)
-      newFiles.splice(toIndex, 0, moved)
-      return newFiles
-    })
-  }
-
-  const handleDragStart = (e: any, index: number) => {
-    setDraggedIndex(index)
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move'
-      e.dataTransfer.setData('text/plain', index.toString())
-    }
-  }
-
-  const handleDragOver = (e: any, index: number) => {
-    e.preventDefault()
-    if (draggedIndex !== null && draggedIndex !== index) {
-      moveFile(draggedIndex, index)
-      setDraggedIndex(index)
-    }
-  }
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-  }
-
-  const handleDropZoneDragEnter = (e: any) => {
-    e.preventDefault()
-    dragCounter.current++
-    setIsDragOver(true)
-  }
-
-  const handleDropZoneDragOver = (e: any) => {
-    e.preventDefault()
-  }
-
-  const handleDropZoneDragLeave = (e: any) => {
-    e.preventDefault()
-    dragCounter.current--
-    if (dragCounter.current === 0) {
-      setIsDragOver(false)
-    }
-  }
-
-  const handleDropZoneDrop = async (e: any) => {
-    e.preventDefault()
-    dragCounter.current = 0
-    setIsDragOver(false)
-    
-    const files = Array.from(e.dataTransfer?.files || []) as File[]
-    const mp3Files = files.filter(file => file.name.toLowerCase().endsWith('.mp3'))
-    
-    const newFiles: MP3File[] = mp3Files.map(file => ({
-      name: file.name,
-      path: file.name,
-      size: file.size
-    }))
-    
-    await addUniqueFiles(newFiles)
+    setTitle('')
+    setAuthor('')
   }
 
   const handleConvert = async () => {
@@ -257,7 +113,7 @@ export function App() {
       setConversionProgress('Preparing conversion...')
       setCommandOutput('')
       setRealtimeOutput([])
-      setShowCommandOutput(true) // Auto-show console during conversion
+      setShowCommandOutput(true)
       
       const filePaths = mp3Files.map(f => f.path)
       
@@ -291,19 +147,9 @@ export function App() {
         setConversionProgress('Conversion completed!')
         setCommandOutput(`✅ ${result}`)
         
-        // Reset UI for new conversion after showing success
+        // Reset UI after showing success
         setTimeout(() => {
-          setConversionProgress('')
-          setCommandOutput('')
-          setRealtimeOutput([])
-          setShowCommandOutput(false)
-          // Clear everything for fresh start
-          setMp3Files([])
-          setCoverImage(null)
-          setCoverImagePath(null)
-          setIsAutoDetectedCover(false)
-          setTitle('')
-          setAuthor('')
+          resetUIState()
         }, 3000)
       } catch (error) {
         setConversionProgress('Conversion failed!')
@@ -311,17 +157,7 @@ export function App() {
         
         // Reset UI after showing error
         setTimeout(() => {
-          setConversionProgress('')
-          setCommandOutput('')
-          setRealtimeOutput([])
-          setShowCommandOutput(false)
-          // Clear everything for fresh start
-          setMp3Files([])
-          setCoverImage(null)
-          setCoverImagePath(null)
-          setIsAutoDetectedCover(false)
-          setTitle('')
-          setAuthor('')
+          resetUIState()
         }, 5000)
       }
     } catch (error) {
@@ -330,251 +166,45 @@ export function App() {
       
       // Reset UI after showing error
       setTimeout(() => {
-        setConversionProgress('')
-        setCommandOutput('')
-        setRealtimeOutput([])
-        setShowCommandOutput(false)
-        // Clear everything for fresh start
-        setMp3Files([])
-        setCoverImage(null)
-        setCoverImagePath(null)
-        setIsAutoDetectedCover(false)
-        setTitle('')
-        setAuthor('')
+        resetUIState()
       }, 5000)
     } finally {
       setIsConverting(false)
     }
   }
 
-
-  // Show conversion-focused UI during processing
-  if (isConverting) {
+  // Router-based rendering
+  if (router.isConversionView) {
     return (
-      <div class="app conversion-mode">
-        <div class="conversion-header">
-          <h1>Converting Audiobook</h1>
-          <div class="conversion-info">
-            <div class="file-count">{mp3Files.length} files → {title || 'Untitled Audiobook'}</div>
-          </div>
-        </div>
-
-        <div class="conversion-content">
-          <div class="progress-section-large">
-            <div class="spinner-large"></div>
-            <div class="current-status">{conversionProgress}</div>
-          </div>
-
-          <div class="console-section">
-            <div class="console-header">
-              <button 
-                class="toggle-console-btn"
-                onClick={() => setShowCommandOutput(!showCommandOutput)}
-              >
-                {showCommandOutput ? '🔽' : '▶️'} Console Output
-              </button>
-            </div>
-            {showCommandOutput && (
-              <div class="console-output" ref={outputRef}>
-                {realtimeOutput.map((line, index) => (
-                  <div key={index} class="console-line">
-                    {line}
-                  </div>
-                ))}
-                {realtimeOutput.length === 0 && (
-                  <div class="console-placeholder">Waiting for output...</div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <ConversionView
+        mp3Files={mp3Files}
+        title={title}
+        conversionProgress={conversionProgress}
+        realtimeOutput={realtimeOutput}
+        showCommandOutput={showCommandOutput}
+        onToggleCommandOutput={handleToggleCommandOutput}
+      />
     )
   }
 
-  // Regular UI when not converting
   return (
-    <div class="app">
-      <div class="app-header">
-        <h1>Audiobook Creator</h1>
-        {(conversionProgress || commandOutput) && (
-          <div class="progress-section">
-            {conversionProgress && (
-              <div class="progress-text">{conversionProgress}</div>
-            )}
-            {commandOutput && (
-              <div class="output-section">
-                <button 
-                  class="toggle-output-btn"
-                  onClick={() => setShowCommandOutput(!showCommandOutput)}
-                >
-                  {showCommandOutput ? '🔽' : '▶️'} Output
-                </button>
-                {showCommandOutput && (
-                  <div class="command-output">
-                    {commandOutput}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div class="app-content">
-        <div class="left-panel">
-          {mp3Files.length === 0 ? (
-            <div 
-              class={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
-              onDragEnter={handleDropZoneDragEnter}
-              onDragOver={handleDropZoneDragOver}
-              onDragLeave={handleDropZoneDragLeave}
-              onDrop={handleDropZoneDrop}
-              onClick={handleFileSelect}
-            >
-              <div class="drop-zone-content">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14,2 14,8 20,8"/>
-                  <circle cx="12" cy="15" r="3"/>
-                  <path d="M12 12v6"/>
-                </svg>
-                <p>Drop MP3 files here or click to select</p>
-                <p class="hint">Files will be converted in the order you arrange them</p>
-              </div>
-            </div>
-          ) : (
-            <div class="file-list">
-              <div class="file-list-header">
-                <h3>Files ({mp3Files.length})</h3>
-                <button class="add-files-btn" onClick={handleFileSelect}>+ Add</button>
-              </div>
-              <div class="files-scroll">
-                {mp3Files.map((file, index) => (
-                  <div 
-                    key={`${file.path}-${index}`}
-                    class={`file-item ${draggedIndex === index ? 'dragging' : ''}`}
-                    draggable={!isConverting}
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <div class="drag-handle">⋮⋮</div>
-                    <div class="file-info">
-                      <div class="file-name">{file.name}</div>
-                      {file.size > 0 && (
-                        <div class="file-size">
-                          {(file.size / 1024 / 1024).toFixed(1)} MB
-                        </div>
-                      )}
-                    </div>
-                    <button 
-                      class="remove-btn"
-                      onClick={() => removeFile(index)}
-                      disabled={isConverting}
-                      aria-label="Remove file"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div class="right-panel">
-          <div class="metadata-form">
-            <h3>Audiobook Details</h3>
-            <div class="form-row">
-              <label htmlFor="title">Title</label>
-              <input
-                id="title"
-                type="text"
-                value={title}
-                onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-                placeholder="Enter book title"
-                disabled={isConverting}
-              />
-            </div>
-            <div class="form-row">
-              <label htmlFor="author">Author</label>
-              <input
-                id="author"
-                type="text"
-                value={author}
-                onInput={(e) => setAuthor((e.target as HTMLInputElement).value)}
-                placeholder="Enter author name"
-                disabled={isConverting}
-              />
-            </div>
-            <div class="form-row">
-              <label>Cover Image</label>
-              {coverImage ? (
-                <div class="cover-preview">
-                  <img 
-                    src={coverImage}
-                    alt="Book cover" 
-                    class="cover-image"
-                    onError={(e) => {
-                      console.error('Image failed to load:', coverImage)
-                    }}
-                  />
-                  <div class="cover-info">
-                    <div class="cover-source">
-                      {isAutoDetectedCover ? (
-                        <span class="auto-detected">📖 Extracted from MP3</span>
-                      ) : (
-                        <span class="manually-selected">🖼️ Custom image</span>
-                      )}
-                    </div>
-                    <div class="cover-name">
-                      {isAutoDetectedCover ? 'Album artwork' : (coverImagePath?.split('/').pop() || 'Custom image')}
-                    </div>
-                    <div class="cover-actions">
-                      <button 
-                        class="replace-cover-btn"
-                        onClick={handleCoverSelect}
-                        disabled={isConverting}
-                      >
-                        Replace
-                      </button>
-                      <button 
-                        class="remove-cover-btn"
-                        onClick={removeCover}
-                        disabled={isConverting}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <button 
-                  class="select-cover-btn"
-                  onClick={handleCoverSelect}
-                  disabled={isConverting}
-                >
-                  Select Cover Image
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button 
-            class="convert-btn"
-            onClick={handleConvert}
-            disabled={isConverting || mp3Files.length === 0}
-          >
-            {isConverting ? (
-              <>
-                <div class="spinner"></div>
-                Converting...
-              </>
-            ) : 'Create Audiobook'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <MainView
+      mp3Files={mp3Files}
+      setMp3Files={setMp3Files}
+      title={title}
+      author={author}
+      coverImage={coverImage}
+      coverImagePath={coverImagePath}
+      isAutoDetectedCover={isAutoDetectedCover}
+      isConverting={isConverting}
+      conversionProgress={conversionProgress}
+      commandOutput={commandOutput}
+      showCommandOutput={showCommandOutput}
+      onTitleChange={setTitle}
+      onAuthorChange={setAuthor}
+      onCoverChange={handleCoverChange}
+      onToggleCommandOutput={handleToggleCommandOutput}
+      onConvert={handleConvert}
+    />
   )
 }

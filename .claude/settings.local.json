@@ -14,7 +14,8 @@
       "Bash(ffmpeg:*)",
       "Bash(ffprobe:*)",
       "Bash(rg:*)",
-      "Bash(deno run:*)"
+      "Bash(deno run:*)",
+      "Bash(deno check:*)"
     ],
     "deny": []
   }
