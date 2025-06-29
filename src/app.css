@@ -321,6 +321,86 @@ html, body {
   cursor: not-allowed;
 }
 
+/* Cover image styles */
+.select-cover-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  color: #333;
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.select-cover-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #007acc;
+}
+
+.select-cover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cover-preview {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+}
+
+.cover-image {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+.cover-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cover-name {
+  font-size: 0.8rem;
+  color: #333;
+  font-weight: 500;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+.remove-cover-btn {
+  background: none;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.remove-cover-btn:hover:not(:disabled) {
+  background: #dc3545;
+  color: white;
+}
+
+.remove-cover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Convert button */
 .convert-btn {
   width: 100%;

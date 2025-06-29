@@ -57,6 +57,7 @@ async fn convert_to_m4b_native(
     output_path: String,
     title: Option<String>,
     author: Option<String>,
+    cover_image: Option<String>,
 ) -> Result<String, String> {
     if mp3_files.is_empty() {
         return Err("No MP3 files provided".to_string());
@@ -140,6 +141,13 @@ async fn convert_to_m4b_native(
     ffmpeg_args.push("-i".to_string());
     ffmpeg_args.push(metadata_file.path().to_string_lossy().to_string());
     
+    // Add cover image if provided
+    let has_cover = cover_image.is_some();
+    if let Some(cover_path) = &cover_image {
+        ffmpeg_args.push("-i".to_string());
+        ffmpeg_args.push(cover_path.clone());
+    }
+    
     // Add concat filter and encoding options
     let filter_complex = format!("concat=n={}:v=0:a=1", mp3_files.len());
     ffmpeg_args.extend([
@@ -147,11 +155,25 @@ async fn convert_to_m4b_native(
         filter_complex,
         "-map_metadata".to_string(),
         format!("{}", mp3_files.len()), // metadata from last input
+    ]);
+    
+    // Add cover image mapping if provided
+    if has_cover {
+        ffmpeg_args.extend([
+            "-map".to_string(),
+            format!("{}:v", mp3_files.len() + 1), // cover image stream
+            "-c:v".to_string(),
+            "mjpeg".to_string(), // JPEG codec for cover
+            "-disposition:v".to_string(),
+            "attached_pic".to_string(), // Mark as attached picture
+        ]);
+    }
+    
+    ffmpeg_args.extend([
         "-c:a".to_string(),
         "aac".to_string(),
         "-b:a".to_string(),
         "64k".to_string(),
-        "-vn".to_string(), // no video
         output_file.clone(),
     ]);
     
@@ -186,7 +208,11 @@ async fn convert_to_m4b_native(
         return Err("FFmpeg process failed".to_string());
     }
 
-    let success_msg = format!("Audiobook created successfully: {} with {} chapters", output_file, chapters.len());
+    let success_msg = if has_cover {
+        format!("Audiobook created successfully: {} with {} chapters and cover art", output_file, chapters.len())
+    } else {
+        format!("Audiobook created successfully: {} with {} chapters", output_file, chapters.len())
+    };
     let _ = app_handle.emit("conversion-output", &success_msg);
     Ok(success_msg)
 }

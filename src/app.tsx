@@ -12,6 +12,7 @@ export function App() {
   const [isConverting, setIsConverting] = useState(false)
   const [title, setTitle] = useState('The Gods Themselves')
   const [author, setAuthor] = useState('Isaac Asimov')
+  const [coverImage, setCoverImage] = useState<string | null>(null)
   const [conversionProgress, setConversionProgress] = useState('')
   const [showCommandOutput, setShowCommandOutput] = useState(false)
   const [commandOutput, setCommandOutput] = useState('')
@@ -72,6 +73,28 @@ export function App() {
     } catch (error) {
       console.error('Error selecting files:', error)
     }
+  }
+
+  const handleCoverSelect = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{
+          name: 'Image Files',
+          extensions: ['jpg', 'jpeg', 'png', 'webp']
+        }]
+      })
+      
+      if (selected && typeof selected === 'string') {
+        setCoverImage(selected)
+      }
+    } catch (error) {
+      console.error('Error selecting cover image:', error)
+    }
+  }
+
+  const removeCover = () => {
+    setCoverImage(null)
   }
 
   const removeFile = (index: number) => {
@@ -197,7 +220,8 @@ export function App() {
           mp3Files: filePaths,
           outputPath,
           title: title || undefined,
-          author: author || undefined
+          author: author || undefined,
+          coverImage: coverImage || undefined
         })
 
         setConversionProgress('Conversion completed!')
@@ -209,7 +233,7 @@ export function App() {
           setCommandOutput('')
           setRealtimeOutput([])
           setShowCommandOutput(false)
-          // Keep files but allow for new conversion
+          // Keep files and cover but allow for new conversion
         }, 3000)
       } catch (error) {
         setConversionProgress('Conversion failed!')
@@ -399,6 +423,36 @@ export function App() {
                 placeholder="Enter author name"
                 disabled={isConverting}
               />
+            </div>
+            <div class="form-row">
+              <label>Cover Image</label>
+              {coverImage ? (
+                <div class="cover-preview">
+                  <img 
+                    src={`file://${coverImage}`} 
+                    alt="Book cover" 
+                    class="cover-image"
+                  />
+                  <div class="cover-info">
+                    <div class="cover-name">{coverImage.split('/').pop()}</div>
+                    <button 
+                      class="remove-cover-btn"
+                      onClick={removeCover}
+                      disabled={isConverting}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button 
+                  class="select-cover-btn"
+                  onClick={handleCoverSelect}
+                  disabled={isConverting}
+                >
+                  Select Cover Image
+                </button>
+              )}
             </div>
           </div>
 
