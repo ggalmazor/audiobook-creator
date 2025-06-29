@@ -371,12 +371,55 @@ html, body {
   gap: 0.5rem;
 }
 
+.cover-source {
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.auto-detected {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.manually-selected {
+  color: #007acc;
+  font-weight: 500;
+}
+
 .cover-name {
   font-size: 0.8rem;
   color: #333;
   font-weight: 500;
   word-break: break-all;
   line-height: 1.3;
+}
+
+.cover-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.replace-cover-btn {
+  background: none;
+  color: #007acc;
+  border: 1px solid #007acc;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.replace-cover-btn:hover:not(:disabled) {
+  background: #007acc;
+  color: white;
+}
+
+.replace-cover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .remove-cover-btn {
@@ -388,7 +431,7 @@ html, body {
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
-  align-self: flex-start;
+  flex: 1;
 }
 
 .remove-cover-btn:hover:not(:disabled) {

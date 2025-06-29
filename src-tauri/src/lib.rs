@@ -3,6 +3,7 @@ use std::io::{Write, BufRead, BufReader};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 use tauri::Emitter;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Chapter information for audiobook metadata
 #[derive(Debug, Clone)]
@@ -75,8 +76,14 @@ async fn extract_cover_art(file_path: &str) -> Result<Option<String>, String> {
         return Ok(None); // No cover art found
     }
     
-    // Return the path to extracted cover
-    Ok(Some(temp_path.to_string_lossy().to_string()))
+    // Read the image file and convert to base64 data URL
+    let image_data = std::fs::read(&temp_path)
+        .map_err(|e| format!("Failed to read extracted cover: {}", e))?;
+    
+    let base64_data = general_purpose::STANDARD.encode(&image_data);
+    let data_url = format!("data:image/jpeg;base64,{}", base64_data);
+    
+    Ok(Some(data_url))
 }
 
 /// Tauri command to extract cover art from the first MP3 file

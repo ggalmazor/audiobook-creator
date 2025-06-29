@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { convertFileSrc } from '@tauri-apps/api/tauri'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 import { validateConversionInputs } from './utils/conversionUtils.ts'
 
@@ -29,6 +29,7 @@ export function App() {
   const [title, setTitle] = useState('The Gods Themselves')
   const [author, setAuthor] = useState('Isaac Asimov')
   const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [isAutoDetectedCover, setIsAutoDetectedCover] = useState(false)
   const [conversionProgress, setConversionProgress] = useState('')
   const [showCommandOutput, setShowCommandOutput] = useState(false)
   const [commandOutput, setCommandOutput] = useState('')
@@ -68,6 +69,7 @@ export function App() {
         const extractedCover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
         if (extractedCover && typeof extractedCover === 'string') {
           setCoverImage(extractedCover)
+          setIsAutoDetectedCover(true)
         }
       } catch (error) {
         console.log('No cover art found in first MP3 file:', error)
@@ -115,6 +117,7 @@ export function App() {
       
       if (selected && typeof selected === 'string') {
         setCoverImage(selected)
+        setIsAutoDetectedCover(false)
       }
     } catch (error) {
       console.error('Error selecting cover image:', error)
@@ -123,6 +126,7 @@ export function App() {
 
   const removeCover = () => {
     setCoverImage(null)
+    setIsAutoDetectedCover(false)
   }
 
   const removeFile = (index: number) => {
@@ -457,19 +461,45 @@ export function App() {
               {coverImage ? (
                 <div class="cover-preview">
                   <img 
-                    src={convertFileSrc(coverImage)}
+                    src={isAutoDetectedCover ? coverImage : convertFileSrc(coverImage)}
                     alt="Book cover" 
                     class="cover-image"
+                    onError={(e) => {
+                      console.error('Image failed to load:', coverImage)
+                      // Fallback for manually selected images
+                      if (!isAutoDetectedCover) {
+                        const target = e.target as HTMLImageElement
+                        target.src = `tauri://localhost/asset/${encodeURIComponent(coverImage)}`
+                      }
+                    }}
                   />
                   <div class="cover-info">
-                    <div class="cover-name">{coverImage.split('/').pop()}</div>
-                    <button 
-                      class="remove-cover-btn"
-                      onClick={removeCover}
-                      disabled={isConverting}
-                    >
-                      Remove
-                    </button>
+                    <div class="cover-source">
+                      {isAutoDetectedCover ? (
+                        <span class="auto-detected">📖 Extracted from MP3</span>
+                      ) : (
+                        <span class="manually-selected">🖼️ Custom image</span>
+                      )}
+                    </div>
+                    <div class="cover-name">
+                      {isAutoDetectedCover ? 'Album artwork' : coverImage.split('/').pop()}
+                    </div>
+                    <div class="cover-actions">
+                      <button 
+                        class="replace-cover-btn"
+                        onClick={handleCoverSelect}
+                        disabled={isConverting}
+                      >
+                        Replace
+                      </button>
+                      <button 
+                        class="remove-cover-btn"
+                        onClick={removeCover}
+                        disabled={isConverting}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
