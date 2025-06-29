@@ -1,7 +1,8 @@
 import './app.css'
-import { useState, useRef } from 'preact/hooks'
+import { useState, useRef, useEffect } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 import { validateConversionInputs } from './utils/conversionUtils.ts'
 
@@ -14,8 +15,29 @@ export function App() {
   const [conversionProgress, setConversionProgress] = useState('')
   const [showCommandOutput, setShowCommandOutput] = useState(false)
   const [commandOutput, setCommandOutput] = useState('')
+  const [realtimeOutput, setRealtimeOutput] = useState<string[]>([])
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const dragCounter = useRef(0)
+  const outputRef = useRef<HTMLDivElement>(null)
+
+  // Listen for real-time conversion output
+  useEffect(() => {
+    const unlisten = listen('conversion-output', (event) => {
+      const output = event.payload as string
+      setRealtimeOutput(prev => [...prev, output])
+      
+      // Auto-scroll to bottom
+      setTimeout(() => {
+        if (outputRef.current) {
+          outputRef.current.scrollTop = outputRef.current.scrollHeight
+        }
+      }, 10)
+    })
+
+    return () => {
+      unlisten.then(f => f())
+    }
+  }, [])
 
   const addUniqueFiles = (newFiles: MP3File[]) => {
     setMp3Files(prev => {
@@ -127,7 +149,15 @@ export function App() {
     }
 
     try {
+      // Generate default filename
+      const defaultFilename = title && author 
+        ? `${title} - ${author}.m4b`
+        : title 
+          ? `${title}.m4b`
+          : 'audiobook.m4b'
+      
       const outputPath = await save({
+        defaultPath: defaultFilename,
         filters: [{
           name: 'M4B Audiobook',
           extensions: ['m4b']
@@ -139,6 +169,8 @@ export function App() {
       setIsConverting(true)
       setConversionProgress('Preparing conversion...')
       setCommandOutput('')
+      setRealtimeOutput([])
+      setShowCommandOutput(true) // Auto-show console during conversion
       
       const filePaths = mp3Files.map(f => f.path)
       
@@ -160,7 +192,7 @@ export function App() {
         
         setConversionProgress(`Converting ${mp3Files.length} files (${Math.round(totalDuration / 60)} minutes)...`)
         
-        // Use native Rust conversion
+        // Use native Rust conversion with streaming output
         const result = await invoke('convert_to_m4b_native', {
           mp3Files: filePaths,
           outputPath,
@@ -171,23 +203,88 @@ export function App() {
         setConversionProgress('Conversion completed!')
         setCommandOutput(`✅ ${result}`)
         
+        // Reset UI for new conversion after showing success
         setTimeout(() => {
           setConversionProgress('')
           setCommandOutput('')
+          setRealtimeOutput([])
+          setShowCommandOutput(false)
+          // Keep files but allow for new conversion
         }, 3000)
       } catch (error) {
         setConversionProgress('Conversion failed!')
         setCommandOutput(`❌ Error: ${error}`)
+        
+        // Reset UI after showing error
+        setTimeout(() => {
+          setConversionProgress('')
+          setCommandOutput('')
+          setRealtimeOutput([])
+          setShowCommandOutput(false)
+        }, 5000)
       }
     } catch (error) {
       setConversionProgress('Conversion failed!')
       setCommandOutput(`❌ Error: ${error}`)
+      
+      // Reset UI after showing error
+      setTimeout(() => {
+        setConversionProgress('')
+        setCommandOutput('')
+        setRealtimeOutput([])
+        setShowCommandOutput(false)
+      }, 5000)
     } finally {
       setIsConverting(false)
     }
   }
 
 
+  // Show conversion-focused UI during processing
+  if (isConverting) {
+    return (
+      <div class="app conversion-mode">
+        <div class="conversion-header">
+          <h1>Converting Audiobook</h1>
+          <div class="conversion-info">
+            <div class="file-count">{mp3Files.length} files → {title || 'Untitled'}</div>
+          </div>
+        </div>
+
+        <div class="conversion-content">
+          <div class="progress-section-large">
+            <div class="spinner-large"></div>
+            <div class="current-status">{conversionProgress}</div>
+          </div>
+
+          <div class="console-section">
+            <div class="console-header">
+              <button 
+                class="toggle-console-btn"
+                onClick={() => setShowCommandOutput(!showCommandOutput)}
+              >
+                {showCommandOutput ? '🔽' : '▶️'} Console Output
+              </button>
+            </div>
+            {showCommandOutput && (
+              <div class="console-output" ref={outputRef}>
+                {realtimeOutput.map((line, index) => (
+                  <div key={index} class="console-line">
+                    {line}
+                  </div>
+                ))}
+                {realtimeOutput.length === 0 && (
+                  <div class="console-placeholder">Waiting for output...</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Regular UI when not converting
   return (
     <div class="app">
       <div class="app-header">
