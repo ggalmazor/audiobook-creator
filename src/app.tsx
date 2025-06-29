@@ -26,8 +26,8 @@ export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
-  const [title, setTitle] = useState('The Gods Themselves')
-  const [author, setAuthor] = useState('Isaac Asimov')
+  const [title, setTitle] = useState('')
+  const [author, setAuthor] = useState('')
   const [coverImage, setCoverImage] = useState<string | null>(null)
   const [coverImagePath, setCoverImagePath] = useState<string | null>(null)
   const [isAutoDetectedCover, setIsAutoDetectedCover] = useState(false)
@@ -64,16 +64,35 @@ export function App() {
       return [...prev, ...uniqueFiles]
     })
     
-    // Try to extract cover from the first file if no cover is set and we're adding the first files
-    if (!coverImage && mp3Files.length === 0 && newFiles.length > 0) {
+    // Extract metadata and cover from the first file if we're adding the first files
+    if (mp3Files.length === 0 && newFiles.length > 0) {
       try {
-        const extractedCover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
-        if (extractedCover && typeof extractedCover === 'string') {
-          setCoverImage(extractedCover)
-          setIsAutoDetectedCover(true)
+        // Extract metadata (title and author)
+        const metadata = await invoke('extract_mp3_metadata_command', { mp3File: newFiles[0].path })
+        if (metadata && Array.isArray(metadata)) {
+          const [extractedTitle, extractedAuthor] = metadata
+          if (extractedTitle && !title) {
+            setTitle(extractedTitle)
+          }
+          if (extractedAuthor && !author) {
+            setAuthor(extractedAuthor)
+          }
         }
       } catch (error) {
-        console.log('No cover art found in first MP3 file:', error)
+        console.log('No metadata found in first MP3 file:', error)
+      }
+
+      // Try to extract cover if no cover is set
+      if (!coverImage) {
+        try {
+          const extractedCover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
+          if (extractedCover && typeof extractedCover === 'string') {
+            setCoverImage(extractedCover)
+            setIsAutoDetectedCover(true)
+          }
+        } catch (error) {
+          console.log('No cover art found in first MP3 file:', error)
+        }
       }
     }
   }
@@ -278,7 +297,13 @@ export function App() {
           setCommandOutput('')
           setRealtimeOutput([])
           setShowCommandOutput(false)
-          // Keep files and cover but allow for new conversion
+          // Clear everything for fresh start
+          setMp3Files([])
+          setCoverImage(null)
+          setCoverImagePath(null)
+          setIsAutoDetectedCover(false)
+          setTitle('')
+          setAuthor('')
         }, 3000)
       } catch (error) {
         setConversionProgress('Conversion failed!')
@@ -290,6 +315,13 @@ export function App() {
           setCommandOutput('')
           setRealtimeOutput([])
           setShowCommandOutput(false)
+          // Clear everything for fresh start
+          setMp3Files([])
+          setCoverImage(null)
+          setCoverImagePath(null)
+          setIsAutoDetectedCover(false)
+          setTitle('')
+          setAuthor('')
         }, 5000)
       }
     } catch (error) {
@@ -302,6 +334,13 @@ export function App() {
         setCommandOutput('')
         setRealtimeOutput([])
         setShowCommandOutput(false)
+        // Clear everything for fresh start
+        setMp3Files([])
+        setCoverImage(null)
+        setCoverImagePath(null)
+        setIsAutoDetectedCover(false)
+        setTitle('')
+        setAuthor('')
       }, 5000)
     } finally {
       setIsConverting(false)
@@ -316,7 +355,7 @@ export function App() {
         <div class="conversion-header">
           <h1>Converting Audiobook</h1>
           <div class="conversion-info">
-            <div class="file-count">{mp3Files.length} files → {title || 'Untitled'}</div>
+            <div class="file-count">{mp3Files.length} files → {title || 'Untitled Audiobook'}</div>
           </div>
         </div>
 

@@ -115,6 +115,48 @@ async fn convert_image_to_data_url(image_path: String) -> Result<String, String>
     Ok(data_url)
 }
 
+/// Extract metadata (title, artist) from MP3 file using ffprobe
+async fn extract_mp3_metadata(file_path: &str) -> Result<(Option<String>, Option<String>), String> {
+    let output = std::process::Command::new("ffprobe")
+        .args([
+            "-i", file_path,
+            "-show_entries", "format_tags=title,artist,album_artist",
+            "-v", "quiet",
+            "-of", "csv=p=0"
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run ffprobe for metadata: {}", e))?;
+    
+    if !output.status.success() {
+        return Ok((None, None));
+    }
+    
+    let metadata_str = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = metadata_str.trim().split('\n').collect();
+    
+    let mut title = None;
+    let mut artist = None;
+    
+    for line in lines {
+        if line.starts_with("title=") {
+            title = Some(line.trim_start_matches("title=").to_string());
+        } else if line.starts_with("artist=") {
+            artist = Some(line.trim_start_matches("artist=").to_string());
+        } else if line.starts_with("album_artist=") && artist.is_none() {
+            // Use album_artist as fallback if no artist found
+            artist = Some(line.trim_start_matches("album_artist=").to_string());
+        }
+    }
+    
+    Ok((title, artist))
+}
+
+/// Tauri command to extract metadata from MP3 file
+#[tauri::command]
+async fn extract_mp3_metadata_command(mp3_file: String) -> Result<(Option<String>, Option<String>), String> {
+    extract_mp3_metadata(&mp3_file).await
+}
+
 /// Tauri command to get durations of multiple MP3 files
 /// Used by the frontend to calculate total audiobook duration
 #[tauri::command]
@@ -330,7 +372,7 @@ async fn convert_to_m4b_native(
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover, convert_image_to_data_url])
+    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover, convert_image_to_data_url, extract_mp3_metadata_command])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
