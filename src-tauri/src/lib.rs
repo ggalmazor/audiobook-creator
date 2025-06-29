@@ -1,6 +1,8 @@
 
-use std::io::Write;
+use std::io::{Write, BufRead, BufReader};
+use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
+use tauri::Emitter;
 
 /// Chapter information for audiobook metadata
 #[derive(Debug, Clone)]
@@ -50,6 +52,7 @@ async fn get_mp3_durations(mp3_files: Vec<String>) -> Result<Vec<f64>, String> {
 /// This is the main conversion function used by the frontend
 #[tauri::command]
 async fn convert_to_m4b_native(
+    app_handle: tauri::AppHandle,
     mp3_files: Vec<String>,
     output_path: String,
     title: Option<String>,
@@ -152,18 +155,40 @@ async fn convert_to_m4b_native(
         output_file.clone(),
     ]);
     
-    // Execute FFmpeg
-    let output = std::process::Command::new("ffmpeg")
-        .args(&ffmpeg_args)
-        .output()
-        .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
+    // Execute FFmpeg with streaming output
+    app_handle.emit("conversion-output", format!("Executing: ffmpeg {}", ffmpeg_args.join(" ")))
+        .map_err(|e| format!("Failed to emit command: {}", e))?;
     
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("FFmpeg error: {}", stderr));
+    let mut child = Command::new("ffmpeg")
+        .args(&ffmpeg_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
+    
+    // Stream stderr output (FFmpeg writes progress to stderr)
+    if let Some(stderr) = child.stderr.take() {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    let _ = app_handle.emit("conversion-output", &line);
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    
+    let status = child.wait()
+        .map_err(|e| format!("Failed to wait for ffmpeg: {}", e))?;
+    
+    if !status.success() {
+        return Err("FFmpeg process failed".to_string());
     }
 
-    Ok(format!("Audiobook created successfully: {} with {} chapters", output_file, chapters.len()))
+    let success_msg = format!("Audiobook created successfully: {} with {} chapters", output_file, chapters.len());
+    let _ = app_handle.emit("conversion-output", &success_msg);
+    Ok(success_msg)
 }
 
 
