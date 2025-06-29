@@ -51,6 +51,35 @@ export function App() {
     setMp3Files(prev => prev.filter((_, i) => i !== index))
   }
 
+  const moveFile = (fromIndex: number, toIndex: number) => {
+    setMp3Files(prev => {
+      const newFiles = [...prev]
+      const [moved] = newFiles.splice(fromIndex, 1)
+      newFiles.splice(toIndex, 0, moved)
+      return newFiles
+    })
+  }
+
+  const handleDragStart = (e: any, index: number) => {
+    setDraggedIndex(index)
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', index.toString())
+    }
+  }
+
+  const handleDragOver = (e: any, index: number) => {
+    e.preventDefault()
+    if (draggedIndex !== null && draggedIndex !== index) {
+      moveFile(draggedIndex, index)
+      setDraggedIndex(index)
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
   const handleConvert = async () => {
     if (mp3Files.length === 0) {
       alert('Please select at least one MP3 file')
@@ -68,126 +97,170 @@ export function App() {
       if (!outputPath) return
 
       setIsConverting(true)
+      setConversionProgress('Preparing conversion...')
+      setCommandOutput('')
       
       const filePaths = mp3Files.map(f => f.path)
       
       // Validate inputs
       const validationError = validateConversionInputs(filePaths, outputPath)
       if (validationError) {
-        alert(`Validation Error: ${validationError}`)
+        setConversionProgress('Validation failed!')
+        setCommandOutput(`❌ ${validationError}`)
+        setIsConverting(false)
         return
       }
 
-      // Use native Rust conversion
-      const result = await invoke('convert_to_m4b_native', {
-        mp3Files: filePaths,
-        outputPath,
-        title: title || undefined,
-        author: author || undefined
-      })
+      setConversionProgress('Getting file durations...')
+      
+      try {
+        // Get durations first for progress tracking
+        const durations = await invoke('get_mp3_durations', { mp3Files: filePaths })
+        const totalDuration = (durations as number[]).reduce((sum, duration) => sum + duration, 0)
+        
+        setConversionProgress(`Converting ${mp3Files.length} files (${Math.round(totalDuration / 60)} minutes)...`)
+        
+        // Use native Rust conversion
+        const result = await invoke('convert_to_m4b_native', {
+          mp3Files: filePaths,
+          outputPath,
+          title: title || undefined,
+          author: author || undefined
+        })
 
-      alert(`Success: ${result}`)
+        setConversionProgress('Conversion completed!')
+        setCommandOutput(`✅ ${result}`)
+        
+        setTimeout(() => {
+          setConversionProgress('')
+          setCommandOutput('')
+        }, 3000)
+      } catch (error) {
+        setConversionProgress('Conversion failed!')
+        setCommandOutput(`❌ Error: ${error}`)
+      }
     } catch (error) {
-      alert(`Error: ${error}`)
+      setConversionProgress('Conversion failed!')
+      setCommandOutput(`❌ Error: ${error}`)
     } finally {
       setIsConverting(false)
     }
   }
 
-  const handleDragOver = (e: any) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }
-
-  const handleDragLeave = (e: any) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }
-
-  const handleDrop = (e: any) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    
-    const files = Array.from(e.dataTransfer?.files || []) as File[]
-    const mp3Files = files.filter(file => file.name.toLowerCase().endsWith('.mp3'))
-    
-    const newFiles: MP3File[] = mp3Files.map(file => ({
-      name: file.name,
-      path: file.name,
-      size: file.size
-    }))
-    
-    addUniqueFiles(newFiles)
-  }
 
   return (
     <div class="app">
-      <h1>Audiobook Creator</h1>
-      
-      <div 
-        class={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleFileSelect}
-      >
-        <div class="drop-zone-content">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14,2 14,8 20,8"/>
-            <circle cx="12" cy="15" r="3"/>
-            <path d="M12 12v6"/>
-          </svg>
-          <p>Drop MP3 files here or click to select</p>
-          <p class="hint">Select multiple MP3 files to create your audiobook</p>
-        </div>
+      <div class="app-header">
+        <h1>Audiobook Creator</h1>
+        {(conversionProgress || commandOutput) && (
+          <div class="progress-section">
+            {conversionProgress && (
+              <div class="progress-text">{conversionProgress}</div>
+            )}
+            {commandOutput && (
+              <div class="output-section">
+                <button 
+                  class="toggle-output-btn"
+                  onClick={() => setShowCommandOutput(!showCommandOutput)}
+                >
+                  {showCommandOutput ? '🔽' : '▶️'} Output
+                </button>
+                {showCommandOutput && (
+                  <div class="command-output">
+                    {commandOutput}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {mp3Files.length > 0 && (
-        <div class="file-list">
-          <h3>Selected Files ({mp3Files.length})</h3>
-          <div class="files">
-            {mp3Files.map((file, index) => (
-              <div key={index} class="file-item">
-                <div class="file-info">
-                  <span class="file-name">{file.name}</span>
-                  {file.size > 0 && (
-                    <span class="file-size">
-                      {(file.size / 1024 / 1024).toFixed(1)} MB
-                    </span>
-                  )}
-                </div>
-                <button 
-                  class="remove-btn"
-                  onClick={() => removeFile(index)}
-                  aria-label="Remove file"
-                >
-                  ×
-                </button>
+      <div class="app-content">
+        <div class="left-panel">
+          {mp3Files.length === 0 ? (
+            <div 
+              class={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
+              onDragEnter={handleDropZoneDragEnter}
+              onDragOver={handleDropZoneDragOver}
+              onDragLeave={handleDropZoneDragLeave}
+              onDrop={handleDropZoneDrop}
+              onClick={handleFileSelect}
+            >
+              <div class="drop-zone-content">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14,2 14,8 20,8"/>
+                  <circle cx="12" cy="15" r="3"/>
+                  <path d="M12 12v6"/>
+                </svg>
+                <p>Drop MP3 files here or click to select</p>
+                <p class="hint">Files will be converted in the order you arrange them</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div class="file-list">
+              <div class="file-list-header">
+                <h3>Files ({mp3Files.length})</h3>
+                <button class="add-files-btn" onClick={handleFileSelect}>+ Add</button>
+              </div>
+              <div class="files-scroll">
+                {mp3Files.map((file, index) => (
+                  <div 
+                    key={`${file.path}-${index}`}
+                    class={`file-item ${draggedIndex === index ? 'dragging' : ''}`}
+                    draggable={!isConverting}
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <div class="drag-handle">⋮⋮</div>
+                    <div class="file-info">
+                      <div class="file-name">{file.name}</div>
+                      {file.size > 0 && (
+                        <div class="file-size">
+                          {(file.size / 1024 / 1024).toFixed(1)} MB
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      class="remove-btn"
+                      onClick={() => removeFile(index)}
+                      disabled={isConverting}
+                      aria-label="Remove file"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
+        <div class="right-panel">
           <div class="metadata-form">
             <h3>Audiobook Details</h3>
             <div class="form-row">
-              <label htmlFor="title">Title:</label>
+              <label htmlFor="title">Title</label>
               <input
                 id="title"
                 type="text"
                 value={title}
                 onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-                placeholder="Enter book title (optional)"
+                placeholder="Enter book title"
+                disabled={isConverting}
               />
             </div>
             <div class="form-row">
-              <label htmlFor="author">Author:</label>
+              <label htmlFor="author">Author</label>
               <input
                 id="author"
                 type="text"
                 value={author}
                 onInput={(e) => setAuthor((e.target as HTMLInputElement).value)}
-                placeholder="Enter author name (optional)"
+                placeholder="Enter author name"
+                disabled={isConverting}
               />
             </div>
           </div>
@@ -195,12 +268,17 @@ export function App() {
           <button 
             class="convert-btn"
             onClick={handleConvert}
-            disabled={isConverting}
+            disabled={isConverting || mp3Files.length === 0}
           >
-            {isConverting ? 'Converting...' : 'Create Audiobook'}
+            {isConverting ? (
+              <>
+                <div class="spinner"></div>
+                Converting...
+              </>
+            ) : 'Create Audiobook'}
           </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
