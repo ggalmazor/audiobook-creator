@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { convertFileSrc } from '@tauri-apps/api/tauri'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 import { validateConversionInputs } from './utils/conversionUtils.ts'
 
