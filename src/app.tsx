@@ -1,5 +1,5 @@
 import './app.css'
-import { useState } from 'preact/hooks'
+import { useState, useRef } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
@@ -11,6 +11,11 @@ export function App() {
   const [isConverting, setIsConverting] = useState(false)
   const [title, setTitle] = useState('The Gods Themselves')
   const [author, setAuthor] = useState('Isaac Asimov')
+  const [conversionProgress, setConversionProgress] = useState('')
+  const [showCommandOutput, setShowCommandOutput] = useState(false)
+  const [commandOutput, setCommandOutput] = useState('')
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const dragCounter = useRef(0)
 
   const addUniqueFiles = (newFiles: MP3File[]) => {
     setMp3Files(prev => {
@@ -78,6 +83,41 @@ export function App() {
 
   const handleDragEnd = () => {
     setDraggedIndex(null)
+  }
+
+  const handleDropZoneDragEnter = (e: any) => {
+    e.preventDefault()
+    dragCounter.current++
+    setIsDragOver(true)
+  }
+
+  const handleDropZoneDragOver = (e: any) => {
+    e.preventDefault()
+  }
+
+  const handleDropZoneDragLeave = (e: any) => {
+    e.preventDefault()
+    dragCounter.current--
+    if (dragCounter.current === 0) {
+      setIsDragOver(false)
+    }
+  }
+
+  const handleDropZoneDrop = (e: any) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer?.files || []) as File[]
+    const mp3Files = files.filter(file => file.name.toLowerCase().endsWith('.mp3'))
+    
+    const newFiles: MP3File[] = mp3Files.map(file => ({
+      name: file.name,
+      path: file.name,
+      size: file.size
+    }))
+    
+    addUniqueFiles(newFiles)
   }
 
   const handleConvert = async () => {
