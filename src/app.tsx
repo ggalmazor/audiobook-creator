@@ -3,8 +3,24 @@ import { useState, useRef, useEffect } from 'preact/hooks'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import { deduplicateFiles, type MP3File } from './utils/fileUtils.ts'
 import { validateConversionInputs } from './utils/conversionUtils.ts'
+
+// Helper function to format duration in hours, minutes, seconds
+const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${remainingSeconds}s`
+  } else if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`
+  } else {
+    return `${remainingSeconds}s`
+  }
+}
 
 export function App() {
   const [mp3Files, setMp3Files] = useState<MP3File[]>([])
@@ -40,11 +56,23 @@ export function App() {
     }
   }, [])
 
-  const addUniqueFiles = (newFiles: MP3File[]) => {
+  const addUniqueFiles = async (newFiles: MP3File[]) => {
     setMp3Files(prev => {
       const uniqueFiles = deduplicateFiles(prev, newFiles)
       return [...prev, ...uniqueFiles]
     })
+    
+    // Try to extract cover from the first file if no cover is set and we're adding the first files
+    if (!coverImage && mp3Files.length === 0 && newFiles.length > 0) {
+      try {
+        const extractedCover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
+        if (extractedCover && typeof extractedCover === 'string') {
+          setCoverImage(extractedCover)
+        }
+      } catch (error) {
+        console.log('No cover art found in first MP3 file:', error)
+      }
+    }
   }
 
   const handleFileSelect = async () => {
@@ -68,7 +96,7 @@ export function App() {
           path,
           size: 0
         }))
-        addUniqueFiles(newFiles)
+        await addUniqueFiles(newFiles)
       }
     } catch (error) {
       console.error('Error selecting files:', error)
@@ -148,7 +176,7 @@ export function App() {
     }
   }
 
-  const handleDropZoneDrop = (e: any) => {
+  const handleDropZoneDrop = async (e: any) => {
     e.preventDefault()
     dragCounter.current = 0
     setIsDragOver(false)
@@ -162,7 +190,7 @@ export function App() {
       size: file.size
     }))
     
-    addUniqueFiles(newFiles)
+    await addUniqueFiles(newFiles)
   }
 
   const handleConvert = async () => {
@@ -213,7 +241,7 @@ export function App() {
         const durations = await invoke('get_mp3_durations', { mp3Files: filePaths })
         const totalDuration = (durations as number[]).reduce((sum, duration) => sum + duration, 0)
         
-        setConversionProgress(`Converting ${mp3Files.length} files (${Math.round(totalDuration / 60)} minutes)...`)
+        setConversionProgress(`Converting ${mp3Files.length} files (${formatDuration(totalDuration)})...`)
         
         // Use native Rust conversion with streaming output
         const result = await invoke('convert_to_m4b_native', {
@@ -429,7 +457,7 @@ export function App() {
               {coverImage ? (
                 <div class="cover-preview">
                   <img 
-                    src={`file://${coverImage}`} 
+                    src={convertFileSrc(coverImage)}
                     alt="Book cover" 
                     class="cover-image"
                   />

@@ -34,6 +34,57 @@ async fn get_mp3_duration_ffprobe(file_path: &str) -> Result<f64, String> {
         .map_err(|e| format!("Failed to parse duration '{}': {}", duration_str, e))
 }
 
+/// Extract cover art from MP3 file if available
+async fn extract_cover_art(file_path: &str) -> Result<Option<String>, String> {
+    // First, check if the MP3 has attached pictures/video streams
+    let probe_output = std::process::Command::new("ffprobe")
+        .args([
+            "-i", file_path,
+            "-show_streams",
+            "-select_streams", "v:0",
+            "-v", "quiet",
+            "-of", "csv=p=0"
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run ffprobe: {}", e))?;
+    
+    // If no video stream found, no cover art
+    if probe_output.stdout.is_empty() {
+        return Ok(None);
+    }
+    
+    // Create temporary file for extracted cover
+    let temp_cover = NamedTempFile::new()
+        .map_err(|e| format!("Failed to create temp cover file: {}", e))?;
+    let temp_path = temp_cover.path().with_extension("jpg");
+    
+    // Extract cover art using ffmpeg
+    let extract_output = std::process::Command::new("ffmpeg")
+        .args([
+            "-i", file_path,
+            "-an", // no audio
+            "-vcodec", "mjpeg",
+            "-vframes", "1", // only first frame
+            "-y", // overwrite
+            &temp_path.to_string_lossy()
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run ffmpeg for cover extraction: {}", e))?;
+    
+    if !extract_output.status.success() {
+        return Ok(None); // No cover art found
+    }
+    
+    // Return the path to extracted cover
+    Ok(Some(temp_path.to_string_lossy().to_string()))
+}
+
+/// Tauri command to extract cover art from the first MP3 file
+#[tauri::command]
+async fn extract_mp3_cover(mp3_file: String) -> Result<Option<String>, String> {
+    extract_cover_art(&mp3_file).await
+}
+
 /// Tauri command to get durations of multiple MP3 files
 /// Used by the frontend to calculate total audiobook duration
 #[tauri::command]
@@ -223,7 +274,7 @@ async fn convert_to_m4b_native(
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native])
+    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
