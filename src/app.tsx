@@ -29,6 +29,7 @@ export function App() {
   const [title, setTitle] = useState('The Gods Themselves')
   const [author, setAuthor] = useState('Isaac Asimov')
   const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [coverImagePath, setCoverImagePath] = useState<string | null>(null)
   const [isAutoDetectedCover, setIsAutoDetectedCover] = useState(false)
   const [conversionProgress, setConversionProgress] = useState('')
   const [showCommandOutput, setShowCommandOutput] = useState(false)
@@ -116,8 +117,19 @@ export function App() {
       })
       
       if (selected && typeof selected === 'string') {
-        setCoverImage(selected)
-        setIsAutoDetectedCover(false)
+        try {
+          // Convert the selected image to a data URL for reliable preview
+          const dataUrl = await invoke('convert_image_to_data_url', { imagePath: selected })
+          setCoverImage(dataUrl as string)
+          setCoverImagePath(selected)
+          setIsAutoDetectedCover(false)
+        } catch (error) {
+          console.error('Failed to convert image to data URL:', error)
+          // Fallback to original path
+          setCoverImage(selected)
+          setCoverImagePath(selected)
+          setIsAutoDetectedCover(false)
+        }
       }
     } catch (error) {
       console.error('Error selecting cover image:', error)
@@ -126,6 +138,7 @@ export function App() {
 
   const removeCover = () => {
     setCoverImage(null)
+    setCoverImagePath(null)
     setIsAutoDetectedCover(false)
   }
 
@@ -461,16 +474,11 @@ export function App() {
               {coverImage ? (
                 <div class="cover-preview">
                   <img 
-                    src={isAutoDetectedCover ? coverImage : convertFileSrc(coverImage)}
+                    src={coverImage}
                     alt="Book cover" 
                     class="cover-image"
                     onError={(e) => {
                       console.error('Image failed to load:', coverImage)
-                      // Fallback for manually selected images
-                      if (!isAutoDetectedCover) {
-                        const target = e.target as HTMLImageElement
-                        target.src = `tauri://localhost/asset/${encodeURIComponent(coverImage)}`
-                      }
                     }}
                   />
                   <div class="cover-info">
@@ -482,7 +490,7 @@ export function App() {
                       )}
                     </div>
                     <div class="cover-name">
-                      {isAutoDetectedCover ? 'Album artwork' : coverImage.split('/').pop()}
+                      {isAutoDetectedCover ? 'Album artwork' : (coverImagePath?.split('/').pop() || 'Custom image')}
                     </div>
                     <div class="cover-actions">
                       <button 

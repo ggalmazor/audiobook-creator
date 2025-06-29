@@ -92,6 +92,29 @@ async fn extract_mp3_cover(mp3_file: String) -> Result<Option<String>, String> {
     extract_cover_art(&mp3_file).await
 }
 
+/// Tauri command to convert any image file to base64 data URL for preview
+#[tauri::command]
+async fn convert_image_to_data_url(image_path: String) -> Result<String, String> {
+    // Read the image file
+    let image_data = std::fs::read(&image_path)
+        .map_err(|e| format!("Failed to read image file: {}", e))?;
+    
+    // Determine MIME type based on file extension
+    let mime_type = if image_path.to_lowercase().ends_with(".png") {
+        "image/png"
+    } else if image_path.to_lowercase().ends_with(".webp") {
+        "image/webp"
+    } else {
+        "image/jpeg" // Default to JPEG for jpg/jpeg and unknown types
+    };
+    
+    // Convert to base64 data URL
+    let base64_data = general_purpose::STANDARD.encode(&image_data);
+    let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+    
+    Ok(data_url)
+}
+
 /// Tauri command to get durations of multiple MP3 files
 /// Used by the frontend to calculate total audiobook duration
 #[tauri::command]
@@ -201,10 +224,33 @@ async fn convert_to_m4b_native(
     
     // Add cover image if provided
     let has_cover = cover_image.is_some();
-    if let Some(cover_path) = &cover_image {
-        ffmpeg_args.push("-i".to_string());
-        ffmpeg_args.push(cover_path.clone());
-    }
+    let temp_cover_file = if let Some(cover_data) = &cover_image {
+        if cover_data.starts_with("data:image/") {
+            // Cover is a data URL, need to convert back to file for FFmpeg
+            let base64_data = cover_data.split(',').nth(1)
+                .ok_or("Invalid data URL format")?;
+            let image_data = general_purpose::STANDARD.decode(base64_data)
+                .map_err(|e| format!("Failed to decode base64: {}", e))?;
+            
+            let temp_file = NamedTempFile::new()
+                .map_err(|e| format!("Failed to create temp file for cover: {}", e))?;
+            let temp_path = temp_file.path().with_extension("jpg");
+            
+            std::fs::write(&temp_path, image_data)
+                .map_err(|e| format!("Failed to write cover data: {}", e))?;
+            
+            ffmpeg_args.push("-i".to_string());
+            ffmpeg_args.push(temp_path.to_string_lossy().to_string());
+            Some(temp_file)
+        } else {
+            // Cover is a file path, use directly
+            ffmpeg_args.push("-i".to_string());
+            ffmpeg_args.push(cover_data.clone());
+            None
+        }
+    } else {
+        None
+    };
     
     // Add concat filter and encoding options
     let filter_complex = format!("concat=n={}:v=0:a=1", mp3_files.len());
@@ -266,6 +312,9 @@ async fn convert_to_m4b_native(
         return Err("FFmpeg process failed".to_string());
     }
 
+    // Keep temp_cover_file in scope until here so it doesn't get deleted
+    drop(temp_cover_file);
+
     let success_msg = if has_cover {
         format!("Audiobook created successfully: {} with {} chapters and cover art", output_file, chapters.len())
     } else {
@@ -281,7 +330,7 @@ async fn convert_to_m4b_native(
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover])
+    .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover, convert_image_to_data_url])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
