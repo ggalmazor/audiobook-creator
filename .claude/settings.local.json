@@ -9,7 +9,11 @@
       "Bash(timeout:*)",
       "WebFetch(domain:v2.tauri.app)",
       "Bash(ls:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(ffprobe:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

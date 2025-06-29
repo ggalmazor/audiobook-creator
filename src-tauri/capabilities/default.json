@@ -7,32 +7,6 @@
   ],
   "permissions": [
     "core:default",
-    "dialog:default",
-    "fs:allow-write-text-file",
-    "fs:allow-temp-write",
-    "shell:allow-open",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "ffmpeg-command",
-          "cmd": "/opt/homebrew/bin/ffmpeg",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "ffmpeg-command-usr-local",
-          "cmd": "/usr/local/bin/ffmpeg",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "ffmpeg-command-usr",
-          "cmd": "/usr/bin/ffmpeg",
-          "args": true,
-          "sidecar": false
-        }
-      ]
-    }
+    "dialog:default"
   ]
 }
