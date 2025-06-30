@@ -1,6 +1,7 @@
-import { useRef } from 'preact/hooks'
+import { useRef, useEffect } from 'preact/hooks'
 import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type { MP3File } from '../types/index.ts'
 import { deduplicateFiles } from '../utils/fileUtils.ts'
 
@@ -27,8 +28,32 @@ export function FileList({
 }: FileListProps) {
   const dragCounter = useRef(0)
 
+  // Listen for Tauri file drop events
+  useEffect(() => {
+    const handleFileDrop = async (event: any) => {
+      const files = event.payload as string[]
+      const mp3Paths = files.filter(path => path.toLowerCase().endsWith('.mp3'))
+      
+      if (mp3Paths.length > 0) {
+        const newFiles: MP3File[] = mp3Paths.map(path => ({
+          name: path.split('/').pop() || path.split('\\').pop() || path,
+          path,
+          size: 0
+        }))
+        await addUniqueFiles(newFiles)
+      }
+    }
+
+    const unlisten = listen('tauri://file-drop', handleFileDrop)
+
+    return () => {
+      unlisten.then(f => f())
+    }
+  }, [mp3Files.length, onMetadataExtracted])
+
   const addUniqueFiles = async (newFiles: MP3File[]) => {
-    setMp3Files([...mp3Files, ...deduplicateFiles(mp3Files, newFiles)])
+    const uniqueFiles = deduplicateFiles(mp3Files, newFiles)
+    setMp3Files([...mp3Files, ...uniqueFiles])
     
     // Extract metadata and cover from the first file if we're adding the first files
     if (mp3Files.length === 0 && newFiles.length > 0) {
