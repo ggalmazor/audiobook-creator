@@ -4,7 +4,7 @@ A desktop application for converting MP3 files into M4B audiobook format with ch
 
 ## Features
 
-> [!INFO]
+> [!NOTE]
 > This app assumes `ffmpeg` and `ffprobe` commands are available in the PATH
 
 ### Core Functionality
