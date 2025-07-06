@@ -28,56 +28,123 @@ export function FileList({
 }: FileListProps) {
   const dragCounter = useRef(0)
 
+  // Component mount logging
+  useEffect(() => {
+    console.log('🚀 FileList component mounted')
+    console.log('🚀 Window object keys:', Object.keys(window))
+    console.log('🚀 Tauri available:', typeof window !== 'undefined' && '__TAURI__' in window)
+    console.log('🚀 Listen function:', typeof listen)
+    console.log('🚀 Invoke function:', typeof invoke)
+    
+    return () => {
+      console.log('🚀 FileList component unmounting')
+    }
+  }, [])
+
+  // Listen for ALL Tauri events to debug
+  useEffect(() => {
+    console.log('🔍 Setting up debug event listeners...')
+    
+    const debugUnlisten = listen('tauri://file-drop-hover', (event) => {
+      console.log('🔍 Tauri file-drop-hover event:', event)
+    })
+    
+    const debugUnlisten2 = listen('tauri://file-drop-cancelled', (event) => {
+      console.log('🔍 Tauri file-drop-cancelled event:', event)
+    })
+
+    return () => {
+      debugUnlisten.then(f => f())
+      debugUnlisten2.then(f => f())
+    }
+  }, [])
+
   // Listen for Tauri file drop events
   useEffect(() => {
+    console.log('🔧 Setting up Tauri file drop listener...')
+    
     const handleFileDrop = async (event: any) => {
+      console.log('📁 Tauri file drop event received:', event)
+      console.log('📁 Event payload:', event.payload)
+      console.log('📁 Event type:', typeof event.payload)
+      
       const files = event.payload as string[]
-      const mp3Paths = files.filter(path => path.toLowerCase().endsWith('.mp3'))
+      console.log('📁 Files from payload:', files)
+      
+      const mp3Paths = files.filter(path => {
+        const isMP3 = path.toLowerCase().endsWith('.mp3')
+        console.log(`📁 File "${path}" is MP3: ${isMP3}`)
+        return isMP3
+      })
+      
+      console.log('📁 Filtered MP3 paths:', mp3Paths)
       
       if (mp3Paths.length > 0) {
-        const newFiles: MP3File[] = mp3Paths.map(path => ({
-          name: path.split('/').pop() || path.split('\\').pop() || path,
-          path,
-          size: 0
-        }))
+        const newFiles: MP3File[] = mp3Paths.map(path => {
+          const fileName = path.split('/').pop() || path.split('\\').pop() || path
+          console.log(`📁 Creating file object: name="${fileName}", path="${path}"`)
+          return {
+            name: fileName,
+            path,
+            size: 0
+          }
+        })
+        
+        console.log('📁 New files to add:', newFiles)
         await addUniqueFiles(newFiles)
+      } else {
+        console.log('📁 No MP3 files found in drop')
       }
     }
 
     const unlisten = listen('tauri://file-drop', handleFileDrop)
+    console.log('🔧 Tauri file drop listener set up successfully')
 
     return () => {
+      console.log('🔧 Cleaning up Tauri file drop listener')
       unlisten.then(f => f())
     }
   }, [mp3Files.length, onMetadataExtracted])
 
   const addUniqueFiles = async (newFiles: MP3File[]) => {
+    console.log('➕ addUniqueFiles called with:', newFiles)
+    console.log('➕ Current mp3Files length:', mp3Files.length)
+    
     const uniqueFiles = deduplicateFiles(mp3Files, newFiles)
+    console.log('➕ Unique files after deduplication:', uniqueFiles)
+    
     setMp3Files([...mp3Files, ...uniqueFiles])
+    console.log('➕ Updated mp3Files state')
     
     // Extract metadata and cover from the first file if we're adding the first files
     if (mp3Files.length === 0 && newFiles.length > 0) {
+      console.log('➕ Extracting metadata from first file:', newFiles[0].path)
       try {
         // Extract metadata (title and author)
         const metadata = await invoke('extract_mp3_metadata_command', { mp3File: newFiles[0].path })
+        console.log('➕ Metadata extracted:', metadata)
+        
         if (metadata && Array.isArray(metadata)) {
           const [extractedTitle, extractedAuthor] = metadata
+          console.log('➕ Title:', extractedTitle, 'Author:', extractedAuthor)
           
           // Extract cover
           let extractedCover = null
           try {
             const cover = await invoke('extract_mp3_cover', { mp3File: newFiles[0].path })
+            console.log('➕ Cover extracted:', cover ? 'Yes' : 'No')
             if (cover && typeof cover === 'string') {
               extractedCover = cover
             }
           } catch (error) {
-            console.log('No cover art found in first MP3 file:', error)
+            console.log('➕ No cover art found in first MP3 file:', error)
           }
           
+          console.log('➕ Calling onMetadataExtracted with:', extractedTitle, extractedAuthor, extractedCover ? 'cover present' : 'no cover')
           onMetadataExtracted(extractedTitle || null, extractedAuthor || null, extractedCover)
         }
       } catch (error) {
-        console.log('No metadata found in first MP3 file:', error)
+        console.log('➕ No metadata found in first MP3 file:', error)
       }
     }
   }
@@ -138,16 +205,19 @@ export function FileList({
   }
 
   const handleDropZoneDragEnter = (e: any) => {
+    console.log('🔄 Browser drag enter event:', e)
     e.preventDefault()
     dragCounter.current++
     setIsDragOver(true)
   }
 
   const handleDropZoneDragOver = (e: any) => {
+    console.log('🔄 Browser drag over event:', e)
     e.preventDefault()
   }
 
   const handleDropZoneDragLeave = (e: any) => {
+    console.log('🔄 Browser drag leave event:', e)
     e.preventDefault()
     dragCounter.current--
     if (dragCounter.current === 0) {
@@ -156,19 +226,36 @@ export function FileList({
   }
 
   const handleDropZoneDrop = async (e: any) => {
+    console.log('🔄 Browser drop event:', e)
+    console.log('🔄 DataTransfer object:', e.dataTransfer)
+    console.log('🔄 Files from dataTransfer:', e.dataTransfer?.files)
+    
     e.preventDefault()
     dragCounter.current = 0
     setIsDragOver(false)
     
     const files = Array.from(e.dataTransfer?.files || []) as File[]
-    const mp3Files = files.filter(file => file.name.toLowerCase().endsWith('.mp3'))
+    console.log('🔄 Files array:', files)
     
-    const newFiles: MP3File[] = mp3Files.map(file => ({
-      name: file.name,
-      path: file.name,
-      size: file.size
-    }))
+    const mp3Files = files.filter(file => {
+      const isMP3 = file.name.toLowerCase().endsWith('.mp3')
+      console.log(`🔄 Browser file "${file.name}" is MP3: ${isMP3}`)
+      return isMP3
+    })
     
+    console.log('🔄 Filtered MP3 files from browser:', mp3Files)
+    
+    const newFiles: MP3File[] = mp3Files.map(file => {
+      const filePath = (file as any).path || file.name
+      console.log(`🔄 Browser file object: name="${file.name}", path="${filePath}", size=${file.size}`)
+      return {
+        name: file.name,
+        path: filePath,
+        size: file.size
+      }
+    })
+    
+    console.log('🔄 New files from browser drop:', newFiles)
     await addUniqueFiles(newFiles)
   }
 
