@@ -380,15 +380,18 @@ async fn convert_to_m4b_native(
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .plugin(
+      tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Debug)
+        .targets([
+          tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+          tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+        ])
+        .build(),
+    )
     .invoke_handler(tauri::generate_handler![get_mp3_durations, convert_to_m4b_native, extract_mp3_cover, convert_image_to_data_url, extract_mp3_metadata_command])
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
+      log::info!("🚀 Tauri app started with logging enabled");
       Ok(())
     })
     .run(tauri::generate_context!())

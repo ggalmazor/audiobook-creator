@@ -20,6 +20,7 @@
     "@tauri-apps/plugin-dialog": "npm:@tauri-apps/plugin-dialog@^2.0.0",
     "@tauri-apps/plugin-shell": "npm:@tauri-apps/plugin-shell@^2.0.0",
     "@tauri-apps/plugin-fs": "npm:@tauri-apps/plugin-fs@^2.0.0",
+    "@tauri-apps/plugin-log": "npm:@tauri-apps/plugin-log@^2.0.0",
     "preact": "npm:preact@^10.26.2",
     "vite": "npm:vite@^6.1.1"
   },
