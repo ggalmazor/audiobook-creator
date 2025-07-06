@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Audiobooks",
   "version": "0.1.0",
-  "identifier": "com.ggalmazor.audiobooks",
+  "identifier": "com.ggalmazor.audiobookcreator",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
